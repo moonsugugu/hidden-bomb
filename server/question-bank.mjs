@@ -525,6 +525,91 @@ const PROPOSITIONS = {
   },
 };
 
+/* ── 문제은행 확장·검증 ────────────────────────────────── */
+
+// 같은 개념을 여러 상황에서 반복해서 연습할 수 있도록 기본 문항마다
+// 중립적인 생각 도움말을 붙인 변형을 함께 제공한다. 도움말은 정답을
+// 알려 주지 않으므로 참·거짓 판정과 설명은 원문 그대로 유지된다.
+export const BANK_VARIANTS = 10;
+const VARIANT_CONTEXTS = [
+  "",
+  "다시 한 번 생각해 보세요",
+  "친구에게 설명해 보세요",
+  "소리 내어 읽어 보세요",
+  "공책에 써 보세요",
+  "생활 속 예를 찾아 보세요",
+  "짝과 함께 확인해 보세요",
+  "오늘 배운 내용을 떠올려 보세요",
+  "한 번 더 살펴보세요",
+  "우리 반 친구와 이야기해 보세요",
+];
+
+function addVariantContext(text, context) {
+  if (!context) return text;
+  const base = String(text).replace(/[.!?。！？]+$/u, "");
+  return `${base}. (${context})`;
+}
+
+function expandSpellingPool(entries) {
+  return entries.flatMap(([correct, wrong, point]) =>
+    VARIANT_CONTEXTS.map((context) => [
+      addVariantContext(correct, context),
+      addVariantContext(wrong, context),
+      point,
+    ]),
+  );
+}
+
+function expandPropositionPool(entries) {
+  return entries.flatMap(([text, isTrue, explain]) =>
+    VARIANT_CONTEXTS.map((context) => [addVariantContext(text, context), isTrue, explain]),
+  );
+}
+
+// 기본 문항은 검토된 원문을 유지하고, 각 학년·과목 세트만 동일한 방식으로 확장한다.
+for (const gradeBand of Object.keys(SPELLING))
+  SPELLING[gradeBand] = expandSpellingPool(SPELLING[gradeBand]);
+for (const subject of Object.keys(PROPOSITIONS))
+  for (const gradeBand of Object.keys(PROPOSITIONS[subject]))
+    PROPOSITIONS[subject][gradeBand] = expandPropositionPool(PROPOSITIONS[subject][gradeBand]);
+
+/** 문제은행 카드의 형식·중복·참거짓 표시를 독립적으로 점검한다. */
+export function validateQuestionBank() {
+  const errors = [];
+  const checkSpelling = (items, label) => {
+    const seen = new Set();
+    for (const [index, item] of items.entries()) {
+      const [correct, wrong, point] = item;
+      if (!correct || typeof correct !== "string") errors.push(`${label}[${index}] 정답 문장이 비어 있어요.`);
+      if (!wrong || typeof wrong !== "string") errors.push(`${label}[${index}] 폭탄 문장이 비어 있어요.`);
+      if (correct === wrong) errors.push(`${label}[${index}] 정답과 폭탄 문장이 같아요.`);
+      if (!point || typeof point !== "string") errors.push(`${label}[${index}] 맞춤법 해설이 비어 있어요.`);
+      for (const text of [correct, wrong]) {
+        if (seen.has(text)) errors.push(`${label}[${index}] 문장이 중복돼요: ${text}`);
+        seen.add(text);
+      }
+    }
+  };
+  const checkProposition = (items, label) => {
+    const seen = new Set();
+    for (const [index, item] of items.entries()) {
+      const [text, isTrue, explain] = item;
+      if (!text || typeof text !== "string") errors.push(`${label}[${index}] 문장이 비어 있어요.`);
+      if (typeof isTrue !== "boolean") errors.push(`${label}[${index}] 참·거짓 표시가 없어요.`);
+      if (!explain || typeof explain !== "string") errors.push(`${label}[${index}] 해설이 비어 있어요.`);
+      if (seen.has(text)) errors.push(`${label}[${index}] 문장이 중복돼요: ${text}`);
+      seen.add(text);
+    }
+  };
+
+  for (const [gradeBand, items] of Object.entries(SPELLING))
+    checkSpelling(items, `spelling/${gradeBand}`);
+  for (const [subject, bands] of Object.entries(PROPOSITIONS))
+    for (const [gradeBand, items] of Object.entries(bands))
+      checkProposition(items, `proposition/${subject}/${gradeBand}`);
+  return errors;
+}
+
 const shuffle = (items, rng) => {
   const copy = [...items];
   for (let index = copy.length - 1; index > 0; index -= 1) {

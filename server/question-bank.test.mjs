@@ -5,10 +5,28 @@ import {
   generateProposition,
   poolSize,
   BANK_STATS,
+  BANK_VARIANTS,
+  validateQuestionBank,
   SUBJECTS,
 } from "./question-bank.mjs";
 
 const BANDS = ["g12", "g34", "g56"];
+
+test("문제은행은 학년·과목별로 10배 확장되고 형식 오류가 없다", () => {
+  assert.deepEqual(validateQuestionBank(), []);
+  const minimumExpanded = 24 * BANK_VARIANTS;
+  for (const gradeBand of BANDS)
+    assert.ok(
+      BANK_STATS.spelling[gradeBand] >= minimumExpanded,
+      `맞춤법 ${gradeBand} 문제 수가 ${BANK_STATS.spelling[gradeBand]}개뿐입니다.`,
+    );
+  for (const subject of SUBJECTS)
+    for (const gradeBand of BANDS)
+      assert.ok(
+        BANK_STATS.proposition[subject][gradeBand] >= minimumExpanded,
+        `${subject}/${gradeBand} 문제 수가 ${BANK_STATS.proposition[subject][gradeBand]}개뿐입니다.`,
+      );
+});
 
 test("맞춤법: 정답 문장과 폭탄 문장이 서로 달라야 한다", () => {
   // 두 문장이 같으면 학생이 무엇을 고쳐야 하는지 알 수 없다.

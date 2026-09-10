@@ -11,7 +11,7 @@ import {
   saveTeacherId,
   sendJson,
 } from "./gameClient";
-import { BrandLinks, MadeBy } from "./branding";
+import { BrandLinks } from "./branding";
 import StudentView from "./StudentView";
 import TeacherView from "./TeacherView";
 import { unlockAudio } from "./sound";
@@ -246,7 +246,6 @@ function Shell({ children, error }: { children: React.ReactNode; error: string }
             <span className="brand-logo">히든밤</span>
             <span className="brand-collab">이종대왕 X 문수네집</span>
           </div>
-          <MadeBy />
         </div>
         <div className="brand-right">
           <BrandLinks />

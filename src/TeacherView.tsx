@@ -72,6 +72,10 @@ function SettingsPanel({
 
   const update = (patch: Partial<Config>) => {
     const next = { ...draft, ...patch };
+    // 연산은 수학, 맞춤법은 국어 문제은행과 연결한다. 명제에서만
+    // 선생님이 학년군별 과목을 자유롭게 고를 수 있다.
+    if (patch.questionType === "arithmetic") next.subject = "math";
+    if (patch.questionType === "spelling") next.subject = "korean";
     // 학년군을 바꾸면 그 학년에 없는 연산은 자동으로 걸러 준다.
     if (patch.gradeBand) {
       const allowed = OPERATIONS_BY_BAND[patch.gradeBand];
@@ -156,21 +160,45 @@ function SettingsPanel({
         </div>
       )}
 
-      {draft.questionType === "proposition" && (
+      {draft.questionType !== "custom" && (
         <div className="field">
-          <span className="field-label">과목</span>
+          <span className="field-label">과목 (학년군별 문제은행)</span>
           <div className="chip-row">
-            {SUBJECTS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={`chip ${draft.subject === option.value ? "is-on" : ""}`}
-                onClick={() => update({ subject: option.value as Subject })}
-              >
-                {option.label}
-              </button>
-            ))}
+            {SUBJECTS.map((option) => {
+              const fixedSubject =
+                draft.questionType === "arithmetic"
+                  ? "math"
+                  : draft.questionType === "spelling"
+                    ? "korean"
+                    : null;
+              const locked = fixedSubject !== null && option.value !== fixedSubject;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  disabled={locked}
+                  className={`chip ${draft.subject === option.value ? "is-on" : ""}`}
+                  onClick={() => update({ subject: option.value as Subject })}
+                  title={
+                    locked
+                      ? draft.questionType === "arithmetic"
+                        ? "연산은 수학 문제은행을 사용해요"
+                        : "맞춤법은 국어 문제은행을 사용해요"
+                      : undefined
+                  }
+                >
+                  {option.label}
+                </button>
+              );
+            })}
           </div>
+          <p className="field-hint">
+            {draft.questionType === "proposition"
+              ? "학년군과 과목을 고르면 해당 문제은행에서 출제해요."
+              : draft.questionType === "arithmetic"
+                ? "연산은 수학 문제은행에서 출제해요."
+                : "맞춤법은 국어 문제은행에서 출제해요."}
+          </p>
           {showIntegratedNote && <p className="field-hint warn">{G12_INTEGRATED_NOTE}</p>}
         </div>
       )}
