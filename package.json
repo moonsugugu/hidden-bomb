@@ -1,0 +1,30 @@
+{
+  "name": "hidden-bomb",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 3005",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 3005",
+    "start:web": "vite preview --host 127.0.0.1 --port 3007",
+    "server": "node server/server.mjs",
+    "start:game": "node server/server.mjs",
+    "test:server": "node --test server/*.test.mjs"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "read-excel-file": "^9.3.5",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^4.5.2",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}

@@ -1,0 +1,13 @@
+# 기존 C:\homeserver\cloudflared\config.yml의 마지막 catch-all( http_status:404 )보다
+# 위쪽에 아래 두 ingress 항목을 추가하세요. tunnel/credentials-file은 기존 값을 유지합니다.
+#
+# 포트는 balance-mate(3201)·mafia-finder와 겹치지 않게 3202/3007을 씁니다.
+# 배포 전에 집 노트북에서 `pm2 status`로 3202가 비어 있는지 먼저 확인하세요.
+
+ingress:
+  - hostname: hiddenbomb.moonsunezip.com
+    path: ^/(v1/game|health)
+    service: http://127.0.0.1:3202
+  - hostname: hiddenbomb.moonsunezip.com
+    service: http://127.0.0.1:3007
+  - service: http_status:404
