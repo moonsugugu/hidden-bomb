@@ -17,7 +17,6 @@
 ## 1. 최초 설치
 
 집 노트북에 Git, Node.js 20 이상, Cloudflare Tunnel, PowerShell 5.1 이상을 준비합니다.
-비공개 GitHub 저장소를 clone할 수 있도록 GitHub 인증도 먼저 설정합니다.
 
 ```powershell
 New-Item -ItemType Directory -Force C:\homeserver\apps | Out-Null
@@ -60,8 +59,9 @@ https://hiddenbomb.moonsunezip.com/health
 - `watchdog.ps1`: 30초마다 `http://127.0.0.1:3202/health`를 확인하고 실패하면 PM2를 재시작합니다.
 - 로그: `deploy\logs\auto-deploy.log`, `deploy\logs\watchdog.log`
 
-GitHub 저장소가 비공개이므로 노트북의 Git 인증은 OS 자격 증명 관리자나 SSH로 저장하세요.
-토큰을 이 저장소의 `.env`나 PowerShell 파일에 적지 마세요.
+이 저장소는 공개라 clone과 pull에 별도 인증이 필요 없습니다.
+push할 일이 생기면 OS 자격 증명 관리자나 SSH로 인증을 저장하세요.
+**토큰이나 비밀번호를 이 저장소의 `.env`나 PowerShell 파일에 적지 마세요.** 공개 저장소입니다.
 
 ## 4. 수동 점검
 
