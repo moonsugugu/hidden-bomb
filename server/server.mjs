@@ -12,7 +12,7 @@ import {
 } from "./bomb-game.mjs";
 
 const HOST = "127.0.0.1";
-const PORT = Number(process.env.PORT || 3202);
+const PORT = Number(process.env.PORT || 3203);
 const GAME_NAME = "hidden-bomb";
 const SOCKET_HEARTBEAT_MS = 5_000;
 // 엑셀로 올린 문제 세트가 한 번에 들어오므로 여유 있게 잡는다.

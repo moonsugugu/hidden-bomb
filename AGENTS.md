@@ -53,8 +53,19 @@
 
 ## 포트
 
-- 게임 서버 `3202`, 운영 웹 `3007`, 로컬 개발 `3005`.
-- balance-mate와 mafia-finder가 둘 다 게임 서버 `3201`을 쓴다. 겹치지 않게 유지한다.
+- 게임 서버 `3203`(PM2 `hidden-bomb-game`), 운영 웹 `3007`(`hidden-bomb-web`), 로컬 개발 `3005`.
+- `3201`·`3202`는 balance-mate가 쓴다. 처음 계획한 3202가 충돌해서 3203으로 옮겼다.
+- 포트를 바꾸면 **네 곳을 함께** 고쳐야 한다.
+  `server/server.mjs` 기본값, `src/gameClient.ts` 로컬 폴백,
+  `deploy/ecosystem.config.cjs`, `deploy/cloudflared-config.example.yml`.
+- 예약 작업 이름에는 반드시 프로젝트 이름을 넣는다. balance-mate 이름을 그대로 쓰면
+  `-Force` 때문에 남의 예약 작업을 덮어쓴다.
+
+## 배포
+
+- 운영은 **HomeServer-Startup / HomeServer-AutoDeploy / HomeServer-Watchdog** 중앙 체계가 맡는다.
+  `deploy/install-home-server.ps1`은 새 기기 전용이다. 운영 노트북에서 돌리면 작업이 중복 등록된다.
+- `main`에 push하면 3분 안에 자동으로 테스트·빌드·재배포된다. **push 전에 테스트를 반드시 돌린다.**
 
 ## 상태
 

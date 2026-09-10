@@ -6,6 +6,11 @@ param(
     [switch]$SkipScheduledTasks
 )
 
+# ⚠️ 현재 운영 중인 집 노트북은 이 스크립트를 쓰지 않는다.
+# HomeServer-Startup / HomeServer-AutoDeploy / HomeServer-Watchdog 중앙 체계가
+# 모든 앱을 함께 관리하고 있으므로, 이 스크립트는 새 기기에 처음 올릴 때만 쓴다.
+# 운영 중인 노트북에서 실행하면 예약 작업이 중복 등록된다.
+
 $ErrorActionPreference = 'Stop'
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw 'Git이 설치되어 있지 않습니다.' }
@@ -36,9 +41,12 @@ if (-not $SkipScheduledTasks) {
     $watchAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$watchScript`" -ProjectDirectory `"$ProjectDirectory`""
     $watchdogAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$watchdogScript`" -ProjectDirectory `"$ProjectDirectory`""
     $trigger = New-ScheduledTaskTrigger -AtLogOn
-    Register-ScheduledTask -TaskName 'BalanceMate GitHub auto deploy' -Action $watchAction -Trigger $trigger -Principal $principal -Force | Out-Null
-    Register-ScheduledTask -TaskName 'BalanceMate watchdog' -Action $watchdogAction -Trigger $trigger -Principal $principal -Force | Out-Null
+    # 작업 이름에 프로젝트 이름을 반드시 넣는다.
+    # 예전에 balance-mate에서 그대로 복사해 온 이름을 쓰고 있었는데,
+    # -Force 때문에 Balance Mate의 예약 작업을 이 프로젝트 폴더로 덮어써 버렸을 것이다.
+    Register-ScheduledTask -TaskName 'HiddenBomb GitHub auto deploy' -Action $watchAction -Trigger $trigger -Principal $principal -Force | Out-Null
+    Register-ScheduledTask -TaskName 'HiddenBomb watchdog' -Action $watchdogAction -Trigger $trigger -Principal $principal -Force | Out-Null
 }
 
-Write-Host "Balance Mate 홈 서버 설치 완료: $ProjectDirectory"
+Write-Host "Hidden Bomb 홈 서버 설치 완료: $ProjectDirectory"
 Write-Host 'Cloudflare Tunnel 설정은 deploy/cloudflared-config.example.yml을 참고하세요.'

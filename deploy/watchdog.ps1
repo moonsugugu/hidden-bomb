@@ -20,7 +20,7 @@ function Write-WatchdogLog([string]$Message) {
 while ($true) {
     $healthy = $false
     try {
-        $health = Invoke-RestMethod -Uri 'http://127.0.0.1:3202/health' -TimeoutSec 5
+        $health = Invoke-RestMethod -Uri 'http://127.0.0.1:3203/health' -TimeoutSec 5
         $healthy = $health.ok -eq $true -and $health.game -eq 'hidden-bomb'
     } catch {
         $healthy = $false

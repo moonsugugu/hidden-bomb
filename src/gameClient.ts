@@ -14,7 +14,7 @@ export function gameWebSocketBase() {
   if (import.meta.env.VITE_GAME_WS_URL) return import.meta.env.VITE_GAME_WS_URL;
   const { hostname, protocol, host } = window.location;
   if (hostname === "localhost" || hostname === "127.0.0.1")
-    return "ws://127.0.0.1:3202/v1/game";
+    return "ws://127.0.0.1:3203/v1/game";
   // 운영에서는 Cloudflare Tunnel이 같은 도메인의 /v1/game을 게임 서버로 넘겨준다.
   return `${protocol === "https:" ? "wss" : "ws"}://${host}/v1/game`;
 }

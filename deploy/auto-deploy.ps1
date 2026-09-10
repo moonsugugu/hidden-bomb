@@ -53,7 +53,7 @@ pm2 save
 $health = $null
 for ($attempt = 1; $attempt -le 10; $attempt += 1) {
     try {
-        $health = Invoke-RestMethod -Uri 'http://127.0.0.1:3202/health' -TimeoutSec 5
+        $health = Invoke-RestMethod -Uri 'http://127.0.0.1:3203/health' -TimeoutSec 5
         if ($health.ok -eq $true -and $health.game -eq 'hidden-bomb') { break }
     } catch {
         if ($attempt -eq 10) { throw }

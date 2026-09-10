@@ -115,7 +115,7 @@
 
 ```powershell
 npm install
-npm run server   # 게임 서버 (127.0.0.1:3202)
+npm run server   # 게임 서버 (127.0.0.1:3203)
 npm run dev      # 웹 (127.0.0.1:3005)
 ```
 
@@ -171,14 +171,16 @@ deploy/              집 노트북 배포 (PM2 + Cloudflare Tunnel)
 집 노트북에서 `127.0.0.1`로만 서비스하고 Cloudflare Tunnel로 공개합니다.
 자세한 내용은 [`deploy/README.md`](deploy/README.md)를 참고하세요.
 
-| 용도 | 포트 |
-| --- | --- |
-| 게임 서버(WebSocket) | `3202` |
-| 운영 웹 서버 | `3007` |
-| 로컬 개발 | `3005` |
+| 용도 | 포트 | PM2 |
+| --- | --- | --- |
+| 게임 서버(WebSocket) | `3203` | `hidden-bomb-game` |
+| 운영 웹 서버 | `3007` | `hidden-bomb-web` |
+| 로컬 개발 | `3005` | — |
 
-> ⚠️ balance-mate와 mafia-finder는 둘 다 게임 서버 기본값이 `3201`입니다.
-> 배포 전에 `pm2 status`로 `3202`와 `3007`이 비어 있는지 확인하세요.
+GitHub `main`에 push하면 3분 안에 자동으로 테스트·빌드·재배포됩니다.
+
+> ⚠️ `3201`·`3202`는 balance-mate가 쓰고 있습니다.
+> 새 앱을 붙일 때는 `pm2 status`로 빈 포트를 먼저 확인하세요.
 
 ---
 
