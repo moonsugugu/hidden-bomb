@@ -5,6 +5,8 @@ import {
   DICE_OPTIONS,
   GRADE_BANDS,
   G12_INTEGRATED_NOTE,
+  MAX_JUDGE_SECONDS,
+  MIN_JUDGE_SECONDS,
   OPERATIONS,
   OPERATIONS_BY_BAND,
   PHASE_LABELS,
@@ -209,27 +211,21 @@ function SettingsPanel({
       </div>
 
       <div className="field">
-        <span className="field-label">판정 모드</span>
-        <div className="chip-row">
-          <button
-            type="button"
-            className={`chip ${draft.judgeMode ? "is-on" : ""}`}
-            onClick={() => update({ judgeMode: true })}
-          >
-            켜기 (권장)
-          </button>
-          <button
-            type="button"
-            className={`chip ${!draft.judgeMode ? "is-on" : ""}`}
-            onClick={() => update({ judgeMode: false })}
-          >
-            끄기 (원본)
-          </button>
-        </div>
+        <span className="field-label">카드 공개까지 {draft.judgeSeconds}초</span>
+        <input
+          type="range"
+          min={MIN_JUDGE_SECONDS}
+          max={MAX_JUDGE_SECONDS}
+          step={1}
+          value={draft.judgeSeconds}
+          aria-label="카드 자동 판정 시간"
+          onChange={(event) => update({ judgeSeconds: Number(event.target.value) })}
+        />
         <p className="field-hint">
-          {draft.judgeMode
-            ? "카드를 열면 문장을 읽고 학생이 ⭕/💣를 직접 골라요. 운이 아니라 실력으로 겨뤄요."
-            : "카드를 열면 바로 결과가 나와요. 원래 보드게임과 같아요."}
+          카드를 열면 문장이 방 전체에 보여요. 판정은 사람이 누르는 게 아니라 이 시간이 지나면
+          서버가 카드의 실제 정답 그대로 자동으로 공개해요. 그동안 모둠 친구들과 함께 맞는지 얘기해
+          보세요. 기본값은 5초이며 {MIN_JUDGE_SECONDS}~{MAX_JUDGE_SECONDS}초 사이를 1초 단위로
+          조절할 수 있어요.
         </p>
       </div>
 

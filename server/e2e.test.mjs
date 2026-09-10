@@ -128,16 +128,17 @@ test("학생이 방 코드로 들어가고 선생님 화면에 바로 보인다"
   teacher.close();
 });
 
-test("주사위 → 카드 선택 → 판정 흐름이 끝까지 동작한다", async () => {
+test("주사위 → 카드 선택 → 자동 판정 흐름이 끝까지 동작한다", async () => {
   const teacher = client({ room: "NEW", role: "teacher" });
   await teacher.opened();
   teacher.send({ type: "create_hub", teacherName: "문수쌤", roomCount: 1 });
   const hubState = await teacher.wait((m) => m.type === "hub_state", "hub_state");
   const roomCode = hubState.rooms[0].code;
 
+  // 실제 시간을 기다려야 하므로 테스트가 오래 걸리지 않도록 최소값(3초)으로 설정한다.
   teacher.send({
     type: "apply_all",
-    config: { questionType: "arithmetic", gradeBand: "g34", judgeMode: true, diceMax: 4 },
+    config: { questionType: "arithmetic", gradeBand: "g34", judgeSeconds: 3, diceMax: 4 },
   });
 
   const alpha = client({ room: roomCode, name: "가람" });
@@ -164,17 +165,55 @@ test("주사위 → 카드 선택 → 판정 흐름이 끝까지 동작한다", 
   assert.ok(pickState.streakTarget >= 1);
 
   alpha.send({ type: "pick_card", index: 0 });
-  const judgeState = await alpha.wait(isState((m) => m.phase === "judge"), "판정 단계");
+  const judgeState = await alpha.wait(isState((m) => m.phase === "judge"), "판정 대기 단계");
   const openSlot = judgeState.grid[0];
   assert.equal(openSlot.faceUp, true);
   assert.ok(openSlot.text.length > 0, "문장이 비어 있습니다.");
-  assert.equal(openSlot.isTrue, null, "판정 전에 정답이 노출됩니다.");
+  assert.equal(openSlot.isTrue, null, "공개 전에 정답이 노출됩니다.");
+  assert.equal(judgeState.config.judgeSeconds, 3);
+  assert.ok(judgeState.judgeEndsAt > Date.now(), "판정 대기 타이머가 클라이언트에 오지 않습니다.");
 
-  alpha.send({ type: "judge", answer: "O" });
-  const revealState = await alpha.wait(isState((m) => m.phase === "reveal"), "공개 단계");
+  // 차례가 아닌 나은도 같은 문장을 같은 순간에 본다. 사람이 누르는 버튼은 어디에도 없다.
+  const betaJudgeState = await beta.wait(isState((m) => m.phase === "judge"), "나은도 함께 본다");
+  assert.equal(betaJudgeState.grid[0].text, openSlot.text);
+  assert.equal(betaJudgeState.isMyTurn, false);
+
+  // 아무도 아무 버튼도 누르지 않는다. 3초 뒤 서버가 저절로 공개한다.
+  const revealState = await alpha.wait(isState((m) => m.phase === "reveal"), "자동 공개", 6_000);
   assert.notEqual(revealState.grid[0].isTrue, null);
   assert.equal(typeof revealState.grid[0].safe, "boolean");
   assert.ok(revealState.grid[0].explain.length > 0);
+  assert.equal(revealState.judgeEndsAt, null);
+
+  alpha.close();
+  beta.close();
+  teacher.close();
+});
+
+test("예전처럼 judge 메시지를 보내도 오류로 안내될 뿐 게임이 깨지지 않는다", async () => {
+  const teacher = client({ room: "NEW", role: "teacher" });
+  await teacher.opened();
+  teacher.send({ type: "create_hub", teacherName: "문수쌤", roomCount: 1 });
+  const hubState = await teacher.wait((m) => m.type === "hub_state", "hub_state");
+  const roomCode = hubState.rooms[0].code;
+
+  const alpha = client({ room: roomCode, name: "가람" });
+  const beta = client({ room: roomCode, name: "나은" });
+  await alpha.opened();
+  await alpha.wait((m) => m.type === "connected" && m.playerId, "가람 입장");
+  await beta.opened();
+  await beta.wait((m) => m.type === "connected" && m.playerId, "나은 입장");
+  teacher.send({ type: "start_all" });
+  await alpha.wait(isState((m) => m.phase === "roll"), "게임 시작");
+
+  alpha.send({ type: "roll_dice" });
+  await alpha.wait(isState((m) => m.phase === "pick"), "카드 선택 단계");
+  alpha.send({ type: "pick_card", index: 0 });
+  await alpha.wait(isState((m) => m.phase === "judge"), "판정 대기 단계");
+
+  alpha.send({ type: "judge", answer: "O" });
+  const error = await alpha.wait((m) => m.type === "error", "안내 메시지");
+  assert.match(error.message, /자동/);
 
   alpha.close();
   beta.close();

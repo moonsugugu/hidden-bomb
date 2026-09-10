@@ -21,6 +21,12 @@ export const TURN_TIMEOUT_MS = 60_000;
 // 접속이 끊긴 사람의 턴은 짧게 기다렸다가 넘긴다.
 export const DISCONNECT_GRACE_MS = 15_000;
 
+// 카드를 연 뒤 사람이 판정 버튼을 누르는 게 아니라, 방 전체가 문장을 함께 읽고
+// 이 시간이 지나면 서버가 카드의 실제 참·거짓 그대로 자동으로 공개한다.
+export const MIN_JUDGE_SECONDS = 3;
+export const MAX_JUDGE_SECONDS = 15;
+export const DEFAULT_JUDGE_SECONDS = 5;
+
 export const MAX_CUSTOM_ITEMS = 200;
 export const MAX_TEXT_LENGTH = 160;
 export const MAX_EXPLAIN_LENGTH = 200;
@@ -94,7 +100,12 @@ export function normalizeConfig(input = {}) {
     deckSize: clamp(Math.round(Number(input.deckSize) || 40), 12, 60),
     bombRatio: clamp(Number(input.bombRatio) || 0.3, 0.1, 0.5),
     diceMax: DICE_MAX_OPTIONS.includes(Number(input.diceMax)) ? Number(input.diceMax) : 4,
-    judgeMode: input.judgeMode === undefined ? true : Boolean(input.judgeMode),
+    // 카드를 열고 몇 초 뒤에 자동으로 공개할지. 판정은 항상 자동이고 사람이 누르지 않는다.
+    judgeSeconds: clamp(
+      Math.round(Number(input.judgeSeconds) || DEFAULT_JUDGE_SECONDS),
+      MIN_JUDGE_SECONDS,
+      MAX_JUDGE_SECONDS,
+    ),
     scoring: SCORING_MODES.includes(input.scoring) ? input.scoring : "allOrNothing",
     targetScore: clamp(Math.round(Number(input.targetScore) || 0), 0, 50),
     customItems: normalizeCustomItems(input.customItems),
@@ -150,6 +161,8 @@ export class BombRoom {
     this.revealEndsAt = null;
     this.turnEndEndsAt = null;
     this.turnDeadline = null;
+    // 카드를 연 뒤 자동 공개까지 남은 시간. 사람이 누르는 판정 버튼은 없다.
+    this.judgeEndsAt = null;
     this.createdAt = Date.now();
     this.emptySince = null;
   }
@@ -264,8 +277,13 @@ export class BombRoom {
     if (!connected && [...this.players.values()].every((item) => !item.connected))
       this.emptySince = Date.now();
     // 끊긴 기기의 차례면 방 전체가 멈추므로 대기 시간을 짧게 줄인다.
+    // judge·reveal·turnEnd 단계는 사람 조작 없이 시간이 지나면 저절로 넘어가므로 해당 없다.
     const currentId = this.currentPlayerId();
-    if (!connected && this.isPlaying() && group.some((member) => member.id === currentId)) {
+    if (
+      !connected &&
+      ["roll", "pick"].includes(this.phase) &&
+      group.some((member) => member.id === currentId)
+    ) {
       this.turnDeadline = Date.now() + DISCONNECT_GRACE_MS;
       return true;
     }
@@ -360,6 +378,7 @@ export class BombRoom {
     this.pending = null;
     this.revealEndsAt = null;
     this.turnEndEndsAt = null;
+    this.judgeEndsAt = null;
     this.turnDeadline = Date.now() + TURN_TIMEOUT_MS;
   }
 
@@ -394,32 +413,23 @@ export class BombRoom {
     const slot = this.grid[index];
     if (!slot) return { ok: false, error: "그 자리에는 카드가 없어요." };
 
+    // 카드를 열면 문장이 방 전체에 공개된다. 판정은 사람이 누르지 않고
+    // 설정한 초(judgeSeconds)가 지나면 서버가 카드의 실제 참·거짓 그대로 자동 공개한다.
     this.pending = { slotIndex: index, card: slot.card, playerAnswer: null, safe: null };
-    if (this.config.judgeMode) {
-      // 판정 모드에서는 문장을 보여 주고 학생이 참·거짓을 직접 고른다.
-      this.phase = "judge";
-      this.turnDeadline = Date.now() + TURN_TIMEOUT_MS;
-      return { ok: true };
-    }
-    return this.resolveCard(slot.card.isTrue, null);
+    this.phase = "judge";
+    this.judgeEndsAt = Date.now() + this.config.judgeSeconds * 1_000;
+    // 이 단계는 자동으로 끝나므로 사람이 응답을 못 해도 멈추지 않는다. 턴 전체 제한은 끈다.
+    this.turnDeadline = null;
+    return { ok: true };
   }
 
-  judge(playerId, answer) {
-    if (this.phase !== "judge") return { ok: false, error: "지금은 판정할 때가 아니에요." };
-    if (!this.controls(playerId, this.currentPlayerId()))
-      return { ok: false, error: "지금은 내 차례가 아니에요." };
-    if (answer !== "O" && answer !== "X")
-      return { ok: false, error: "맞아요 또는 폭탄이에요 중에서 골라 주세요." };
-    const card = this.pending?.card;
-    if (!card) return { ok: false, error: "판정할 카드가 없어요." };
-    return this.resolveCard((answer === "O") === card.isTrue, answer);
-  }
-
+  /** 판정 대기 시간이 끝나 카드의 실제 참·거짓 그대로 공개한다. 사람이 개입하지 않는다. */
   resolveCard(safe, playerAnswer) {
     const card = this.pending.card;
     const player = this.getPlayer(this.currentPlayerId());
     this.pending.safe = safe;
     this.pending.playerAnswer = playerAnswer;
+    this.judgeEndsAt = null;
 
     this.log.push({
       ts: Date.now(),
@@ -512,6 +522,7 @@ export class BombRoom {
     this.revealEndsAt = null;
     this.turnEndEndsAt = null;
     this.turnDeadline = null;
+    this.judgeEndsAt = null;
     const ranking = this.seatedPlayers()
       .map((player) => ({ id: player.id, name: player.name, score: player.score }))
       .sort((a, b) => b.score - a.score);
@@ -527,6 +538,11 @@ export class BombRoom {
 
   /** 시간이 지나서 저절로 넘어가야 하는 것들을 처리한다. 상태가 바뀌면 true. */
   tick(now = Date.now()) {
+    if (this.phase === "judge" && this.judgeEndsAt && now >= this.judgeEndsAt) {
+      // 사람이 판정하지 않는다. 카드에 적힌 실제 참·거짓 그대로 공개한다.
+      this.resolveCard(this.pending.card.isTrue, null);
+      return true;
+    }
     if (this.phase === "reveal" && this.revealEndsAt && now >= this.revealEndsAt) {
       this.advanceFromReveal();
       return true;
@@ -535,11 +551,8 @@ export class BombRoom {
       this.nextTurn();
       return true;
     }
-    if (
-      ["roll", "pick", "judge"].includes(this.phase) &&
-      this.turnDeadline &&
-      now >= this.turnDeadline
-    ) {
+    // roll·pick 단계만 사람의 조작을 기다린다. judge 단계는 judgeEndsAt이 대신 처리한다.
+    if (["roll", "pick"].includes(this.phase) && this.turnDeadline && now >= this.turnDeadline) {
       // 제한 시간을 넘기면 그때까지 넘긴 만큼만 인정하고 다음 사람에게 넘긴다.
       this.pending = null;
       this.endTurn(false);
@@ -575,7 +588,8 @@ export class BombRoom {
       case "pick_card":
         return this.pickCard(playerId, message.index);
       case "judge":
-        return this.judge(playerId, message.answer);
+        // 예전 클라이언트가 남아 있을 때를 대비한 안내. 이제 판정은 항상 자동이다.
+        return { ok: false, error: "이 게임은 시간이 지나면 자동으로 판정돼요." };
       case "skip_turn":
         // 접속이 끊긴 사람 때문에 방이 멈췄을 때 선생님이 넘길 수 있게 한다.
         if (!this.canHost(playerId)) return { ok: false, error: "방장만 넘길 수 있어요." };
@@ -726,6 +740,8 @@ export class BombRoom {
       revealEndsAt: this.revealEndsAt,
       turnEndEndsAt: this.turnEndEndsAt,
       turnDeadline: this.turnDeadline,
+      // 카드를 연 뒤 자동으로 공개되기까지 남은 시각. 방 전체가 같은 값을 본다.
+      judgeEndsAt: this.judgeEndsAt,
       minPlayers: MIN_PLAYERS,
       maxPlayers: MAX_PLAYERS,
       serverTime: Date.now(),

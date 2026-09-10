@@ -14,6 +14,7 @@ import {
 import { BrandLinks, MadeBy } from "./branding";
 import StudentView from "./StudentView";
 import TeacherView from "./TeacherView";
+import { unlockAudio } from "./sound";
 
 type Mode = "home" | "student" | "teacher";
 type Target = {
@@ -193,11 +194,16 @@ export default function App() {
 
 function Shell({ children, error }: { children: React.ReactNode; error: string }) {
   return (
-    <div className="shell">
+    <div className="shell" onPointerDownCapture={unlockAudio}>
       <header className="brand-bar">
-        <span className="brand-logo">💣 폭탄카드</span>
-        <div className="brand-right">
+        <div className="brand-lockup">
+          <div className="brand-title-wrap">
+            <span className="brand-logo">히든밤</span>
+            <span className="brand-collab">이종대왕 X 문수네집</span>
+          </div>
           <MadeBy />
+        </div>
+        <div className="brand-right">
           <BrandLinks />
         </div>
       </header>
@@ -242,12 +248,28 @@ function Home({
   return (
     <div className="home">
       <section className="home-hero">
-        <h1>💣 폭탄카드</h1>
-        <p>
-          주사위를 굴려 나온 숫자만큼 <strong>연속으로 정답 카드</strong>를 골라야 해요.
-          <br />
-          폭탄을 밟으면 그 차례는 끝!
-        </p>
+        <div className="home-hero-art" aria-hidden="true">
+          <img src="/hiddenbomb-hero.png" alt="" />
+        </div>
+        <div className="home-hero-copy">
+          <p className="home-kicker">이종대왕X문수네집 콜라보 게임앱</p>
+          <h1>
+            <span className="home-hero-bomb" aria-hidden="true">
+              💣
+            </span>{" "}
+            히든밤
+          </h1>
+          <p>
+            친구가 연 문제를 <strong>방 안의 친구 모두가 함께 보고</strong>,
+            <br />
+            {" "}잠깐 생각한 뒤 자동으로 폭탄을 찾아요.
+          </p>
+          <div className="home-badges" aria-label="히든밤 게임 특징">
+            <span>👀 모두 함께 보기</span>
+            <span>⏱ 3~15초 자동 판정</span>
+            <span>🎲 주사위 대결</span>
+          </div>
+        </div>
       </section>
 
       <div className="home-tabs">

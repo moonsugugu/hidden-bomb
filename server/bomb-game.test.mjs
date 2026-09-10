@@ -6,6 +6,9 @@ import {
   MIN_PLAYERS,
   MAX_PLAYERS,
   MAX_HUB_ROOMS,
+  MIN_JUDGE_SECONDS,
+  MAX_JUDGE_SECONDS,
+  DEFAULT_JUDGE_SECONDS,
   normalizeConfig,
   normalizeCustomItems,
   buildDeck,
@@ -47,13 +50,14 @@ function stackGrid(room, flags) {
 }
 
 /**
- * 공개·턴종료 타이머만 정확히 흘려보낸다.
+ * 판정 대기·공개·턴종료 타이머만 정확히 흘려보낸다.
  * 먼 미래 시각으로 tick하면 턴 제한 시간까지 같이 만료되어
- * 검사하려던 턴을 지나쳐 버리므로 대기 중인 타이머 시각만 넘긴다.
+ * 검사하려던 턴을 지나쳐 버리므로 대기 중인 타이머 시각만 순서대로 넘긴다.
+ * (judge → reveal → turnEnd 순서는 tick()이 실제로 검사하는 순서와 같다.)
  */
 const settle = (room) => {
   for (let guard = 0; guard < 50; guard += 1) {
-    const pendingAt = room.revealEndsAt ?? room.turnEndEndsAt;
+    const pendingAt = room.judgeEndsAt ?? room.revealEndsAt ?? room.turnEndEndsAt;
     if (!pendingAt) break;
     if (!room.tick(pendingAt + 1)) break;
   }
@@ -205,8 +209,8 @@ test("뒷면 카드의 내용은 스냅샷에 절대 담기지 않는다", () =>
   }
 });
 
-test("판정하기 전에는 정답 여부를 알려 주지 않는다", () => {
-  const room = makeRoom({ judgeMode: true }, 2);
+test("판정 대기 시간이 지나기 전에는 정답 여부를 알려 주지 않는다", () => {
+  const room = makeRoom({}, 2);
   room.start();
   stackGrid(room, [true, false, true, true, false, true, true, true, false]);
   room.rollDice("p1");
@@ -220,25 +224,48 @@ test("판정하기 전에는 정답 여부를 알려 주지 않는다", () => {
   assert.equal(slot.explain, null);
 });
 
-test("공개 단계가 되면 정답과 해설을 보여 준다", () => {
-  const room = makeRoom({ judgeMode: true }, 2);
+test("방에 있는 모든 참가자가 열린 카드를 함께 본다", () => {
+  // 차례가 아닌 사람도, 심지어 선생님도, 카드를 연 순간부터 같은 문장을 봐야 한다.
+  const room = makeRoom({}, 3);
+  room.start();
+  stackGrid(room, Array(9).fill(true));
+  room.rollDice("p1");
+  room.pickCard("p1", 0);
+
+  for (const viewerId of ["p1", "p2", "p3", null]) {
+    const slot = room.snapshotFor(viewerId).grid[0];
+    assert.equal(slot.faceUp, true, `${viewerId} 에게 카드가 뒷면으로 보입니다.`);
+    assert.equal(slot.text, "고정카드0", `${viewerId} 에게 문장이 보이지 않습니다.`);
+  }
+  // 차례가 아닌 사람은 조작만 못 할 뿐, 보이는 카드 내용은 완전히 같다.
+  assert.equal(room.snapshotFor("p1").isMyTurn, true);
+  assert.equal(room.snapshotFor("p2").isMyTurn, false);
+  assert.deepEqual(room.snapshotFor("p1").grid[0], room.snapshotFor("p2").grid[0]);
+});
+
+test("판정 대기 시간이 지나면 카드의 실제 정답 그대로 자동 공개된다", () => {
+  const room = makeRoom({}, 2);
   room.start();
   stackGrid(room, [false, true, true, true, true, true, true, true, true]);
   room.rollDice("p1");
   room.pickCard("p1", 0);
-  room.judge("p1", "X");
+  assert.ok(room.pending, "카드를 골랐는데 pending이 비어 있습니다.");
+  assert.ok(room.judgeEndsAt > Date.now(), "판정 대기 타이머가 잡히지 않았습니다.");
+
+  room.tick(room.judgeEndsAt + 1); // 사람이 아무것도 누르지 않아도 저절로 공개된다
 
   const slot = room.snapshotFor("p1").grid[0];
   assert.equal(room.phase, "reveal");
   assert.equal(slot.isTrue, false);
   assert.equal(slot.explain, "고정해설0");
-  assert.equal(slot.safe, true); // 폭탄을 폭탄이라고 맞혔으므로 안전
+  assert.equal(slot.safe, false); // 거짓 카드라 폭탄
+  assert.equal(room.judgeEndsAt, null); // 판정이 끝났으니 타이머도 정리된다
 });
 
-/* ── 판정 모드 ────────────────────────────────────────── */
+/* ── 자동 판정 ────────────────────────────────────────── */
 
-test("판정 모드: 바르게 판정하면 살아남고 틀리면 폭탄이 터진다", () => {
-  const room = makeRoom({ judgeMode: true, diceMax: 3 }, 2);
+test("자동 판정: 참인 카드는 시간이 지나면 안전하게 처리된다", () => {
+  const room = makeRoom({ diceMax: 3 }, 2);
   room.start();
   stackGrid(room, [true, false, true, true, true, true, true, true, true]);
 
@@ -247,44 +274,44 @@ test("판정 모드: 바르게 판정하면 살아남고 틀리면 폭탄이 터
   room.streakTarget = 2;
 
   room.pickCard("p1", 0); // 참인 카드
-  room.judge("p1", "O"); // 바른 판정
+  settle(room); // 사람이 누르지 않아도 시간이 지나면 자동으로 안전 처리된다
   assert.equal(room.streak, 1);
-  settle(room);
 
   assert.equal(room.phase, "pick");
   room.pickCard("p1", 1); // 거짓인 카드
-  room.judge("p1", "O"); // 틀린 판정 → 폭탄
-  assert.equal(room.pending.safe, false);
-  settle(room);
+  settle(room); // 자동으로 폭탄 처리된다
 
   assert.equal(room.turnResult.success, false);
   assert.equal(room.getPlayer("p1").score, 0);
 });
 
-test("판정 모드: 참인 카드를 폭탄이라고 하면 터진다", () => {
-  const room = makeRoom({ judgeMode: true }, 2);
+test("자동 판정: 거짓 카드는 아무도 누르지 않아도 폭탄으로 터진다", () => {
+  const room = makeRoom({}, 2);
+  room.start();
+  stackGrid(room, [false, true, true, true, true, true, true, true, true]);
+  room.rollDice("p1");
+  room.pickCard("p1", 0);
+  room.tick(room.judgeEndsAt + 1);
+  assert.equal(room.pending.safe, false);
+});
+
+test("판정 대기 시간이 끝나기 전에 시간을 건드려도 미리 넘어가지 않는다", () => {
+  const room = makeRoom({ judgeSeconds: 10 }, 2);
   room.start();
   stackGrid(room, Array(9).fill(true));
   room.rollDice("p1");
   room.pickCard("p1", 0);
-  room.judge("p1", "X"); // 참인데 폭탄이라고 판정
-  assert.equal(room.pending.safe, false);
-});
+  const endsAt = room.judgeEndsAt;
 
-test("원본 모드에서는 판정 단계 없이 카드 자체로 결정된다", () => {
-  const room = makeRoom({ judgeMode: false }, 2);
-  room.start();
-  stackGrid(room, [false, true, true, true, true, true, true, true, true]);
-  room.rollDice("p1");
-  room.pickCard("p1", 0); // 폭탄 카드
-  assert.equal(room.phase, "reveal"); // judge 단계를 건너뛴다
-  assert.equal(room.pending.safe, false);
+  const changed = room.tick(endsAt - 1); // 아직 1ms 전
+  assert.equal(changed, false);
+  assert.equal(room.phase, "judge");
 });
 
 /* ── 점수 ─────────────────────────────────────────────── */
 
 test("주사위 숫자만큼 연속으로 성공하면 그 숫자만큼 점수를 얻는다", () => {
-  const room = makeRoom({ judgeMode: true }, 2);
+  const room = makeRoom({}, 2);
   room.start();
   stackGrid(room, Array(9).fill(true));
   room.rollDice("p1");
@@ -293,15 +320,14 @@ test("주사위 숫자만큼 연속으로 성공하면 그 숫자만큼 점수�
 
   for (let index = 0; index < 3; index += 1) {
     room.pickCard("p1", index);
-    room.judge("p1", "O");
-    settle(room);
+    settle(room); // 아무도 누르지 않아도 참인 카드는 시간이 지나면 안전 처리된다
   }
   assert.equal(room.turnResult.success, true);
   assert.equal(room.getPlayer("p1").score, 3);
 });
 
 test("중간에 터지면 기본 점수제에서는 0점이다", () => {
-  const room = makeRoom({ judgeMode: true, scoring: "allOrNothing" }, 2);
+  const room = makeRoom({ scoring: "allOrNothing" }, 2);
   room.start();
   stackGrid(room, [true, true, false, true, true, true, true, true, true]);
   room.rollDice("p1");
@@ -309,13 +335,10 @@ test("중간에 터지면 기본 점수제에서는 0점이다", () => {
   room.streakTarget = 3;
 
   room.pickCard("p1", 0);
-  room.judge("p1", "O");
   settle(room);
   room.pickCard("p1", 1);
-  room.judge("p1", "O");
   settle(room);
-  room.pickCard("p1", 2);
-  room.judge("p1", "O"); // 폭탄인데 참이라고 판정
+  room.pickCard("p1", 2); // 거짓 카드 → 시간이 지나면 자동으로 폭탄
   settle(room);
 
   assert.equal(room.turnResult.success, false);
@@ -324,7 +347,7 @@ test("중간에 터지면 기본 점수제에서는 0점이다", () => {
 });
 
 test("부분 점수제에서는 터져도 넘긴 만큼 점수를 준다", () => {
-  const room = makeRoom({ judgeMode: true, scoring: "partial" }, 2);
+  const room = makeRoom({ scoring: "partial" }, 2);
   room.start();
   stackGrid(room, [true, true, false, true, true, true, true, true, true]);
   room.rollDice("p1");
@@ -332,13 +355,10 @@ test("부분 점수제에서는 터져도 넘긴 만큼 점수를 준다", () =>
   room.streakTarget = 3;
 
   room.pickCard("p1", 0);
-  room.judge("p1", "O");
   settle(room);
   room.pickCard("p1", 1);
-  room.judge("p1", "O");
   settle(room);
   room.pickCard("p1", 2);
-  room.judge("p1", "O");
   settle(room);
 
   assert.equal(room.getPlayer("p1").score, 2);
@@ -347,7 +367,7 @@ test("부분 점수제에서는 터져도 넘긴 만큼 점수를 준다", () =>
 /* ── 턴 진행 ──────────────────────────────────────────── */
 
 test("턴이 끝나면 다음 사람에게 넘어간다", () => {
-  const room = makeRoom({ judgeMode: true }, 3);
+  const room = makeRoom({}, 3);
   room.start();
   assert.equal(room.currentPlayerId(), "p1");
   room.endTurn(false);
@@ -357,7 +377,7 @@ test("턴이 끝나면 다음 사람에게 넘어간다", () => {
 });
 
 test("접속이 끊긴 사람의 턴은 건너뛴다", () => {
-  const room = makeRoom({ judgeMode: true }, 3);
+  const room = makeRoom({}, 3);
   room.start();
   room.setConnected("p2", false);
   room.endTurn(false);
@@ -405,7 +425,7 @@ test("끊긴 사람의 턴은 제한 시간이 짧아진다", () => {
 /* ── 격자와 덱 ────────────────────────────────────────── */
 
 test("카드를 쓰면 더미에서 바로 새 카드로 채운다", () => {
-  const room = makeRoom({ judgeMode: false }, 2);
+  const room = makeRoom({}, 2);
   room.start();
   const deckBefore = room.deck.length;
   const filled = room.grid.filter(Boolean).length;
@@ -456,12 +476,11 @@ test("목표 점수에 닿으면 게임이 끝난다", () => {
 });
 
 test("결과에는 이번 판에 터진 폭탄이 모두 담긴다", () => {
-  const room = makeRoom({ judgeMode: true }, 2);
+  const room = makeRoom({}, 2);
   room.start();
   stackGrid(room, [false, true, true, true, true, true, true, true, true]);
   room.rollDice("p1");
-  room.pickCard("p1", 0);
-  room.judge("p1", "O"); // 오답 판정 → 기록에 남는다
+  room.pickCard("p1", 0); // 거짓 카드 → 시간이 지나면 자동으로 폭탄, 기록에 남는다
   settle(room);
   room.finish("stopped");
   assert.equal(room.result.bombs.length, 1);
@@ -498,6 +517,7 @@ test("이상한 설정값은 안전한 범위로 잘린다", () => {
     bombRatio: 5,
     targetScore: -3,
     questionType: "해킹",
+    judgeSeconds: 999,
   });
   assert.equal(config.diceMax, 4);
   assert.equal(config.gridSize, 9);
@@ -505,6 +525,19 @@ test("이상한 설정값은 안전한 범위로 잘린다", () => {
   assert.equal(config.bombRatio, 0.5);
   assert.equal(config.targetScore, 0);
   assert.equal(config.questionType, "arithmetic");
+  assert.equal(config.judgeSeconds, MAX_JUDGE_SECONDS);
+});
+
+test("카드 공개까지 걸리는 시간은 3~15초 범위로만 정할 수 있다", () => {
+  assert.equal(normalizeConfig({}).judgeSeconds, DEFAULT_JUDGE_SECONDS);
+  assert.equal(normalizeConfig({ judgeSeconds: 1 }).judgeSeconds, MIN_JUDGE_SECONDS);
+  assert.equal(normalizeConfig({ judgeSeconds: 3 }).judgeSeconds, 3);
+  assert.equal(normalizeConfig({ judgeSeconds: 10 }).judgeSeconds, 10);
+  assert.equal(normalizeConfig({ judgeSeconds: 15 }).judgeSeconds, MAX_JUDGE_SECONDS);
+  assert.equal(normalizeConfig({ judgeSeconds: 30 }).judgeSeconds, MAX_JUDGE_SECONDS);
+  assert.equal(normalizeConfig({ judgeSeconds: -5 }).judgeSeconds, MIN_JUDGE_SECONDS);
+  // 소수점은 반올림한다.
+  assert.equal(normalizeConfig({ judgeSeconds: 7.6 }).judgeSeconds, 8);
 });
 
 test("엑셀 문제는 개수와 길이가 제한되고 중복은 걸러진다", () => {
@@ -605,6 +638,18 @@ test("덱은 요청한 폭탄 비율을 지킨다", () => {
 test("모르는 메시지는 조용히 거절한다", () => {
   const room = makeRoom({}, 2);
   assert.equal(room.handle("p1", { type: "drop_table" }).ok, false);
+});
+
+test("예전 클라이언트가 judge를 보내도 서버가 죽지 않고 안내만 한다", () => {
+  const room = makeRoom({}, 2);
+  room.start();
+  room.rollDice("p1");
+  room.pickCard("p1", 0);
+  const result = room.handle("p1", { type: "judge", answer: "O" });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /자동/);
+  // 판정은 여전히 진행 중이어야 한다. 잘못된 메시지 때문에 상태가 깨지면 안 된다.
+  assert.equal(room.phase, "judge");
 });
 
 test("방장이 아니면 시작·설정·문제 올리기를 할 수 없다", () => {

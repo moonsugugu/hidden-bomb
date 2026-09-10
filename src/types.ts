@@ -22,7 +22,8 @@ export type Config = {
   deckSize: number;
   bombRatio: number;
   diceMax: number;
-  judgeMode: boolean;
+  /** 카드를 연 뒤 자동으로 공개되기까지 걸리는 초. 3~15. 사람이 누르는 판정 버튼은 없다. */
+  judgeSeconds: number;
   scoring: Scoring;
   targetScore: number;
   customCount: number;
@@ -115,6 +116,8 @@ export type GameState = {
   revealEndsAt: number | null;
   turnEndEndsAt: number | null;
   turnDeadline: number | null;
+  /** 카드를 연 뒤 자동 공개까지 남은 시각. 방 전체가 같은 값을 본다. */
+  judgeEndsAt: number | null;
   minPlayers: number;
   maxPlayers: number;
   serverTime: number;

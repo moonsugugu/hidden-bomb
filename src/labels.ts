@@ -39,7 +39,7 @@ export const PHASE_LABELS: Record<Phase, string> = {
   lobby: "대기 중",
   roll: "주사위 차례",
   pick: "카드 고르는 중",
-  judge: "판정 중",
+  judge: "자동 판정 대기",
   reveal: "카드 공개",
   turnEnd: "턴 정리",
   finished: "게임 끝",
@@ -50,6 +50,11 @@ export const DICE_OPTIONS = [
   { value: 4, label: "1~4", hint: "권장" },
   { value: 6, label: "1~6", hint: "원본 그대로 · 5~6은 매우 어려워요" },
 ];
+
+// server/bomb-game.mjs의 MIN_JUDGE_SECONDS·MAX_JUDGE_SECONDS와 같은 값을 유지해야 한다.
+// 카드를 연 뒤 사람이 누르지 않고 이 범위 안에서 정한 초가 지나면 서버가 자동으로 공개한다.
+export const MIN_JUDGE_SECONDS = 3;
+export const MAX_JUDGE_SECONDS = 15;
 
 export const SCORING_OPTIONS = [
   { value: "allOrNothing" as const, label: "전부 아니면 0점", hint: "원본 규칙" },

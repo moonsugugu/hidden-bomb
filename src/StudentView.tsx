@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { GameState, GridSlot } from "./types";
 import { PHASE_LABELS, describeConfig } from "./labels";
 import { downloadBombReport } from "./excel";
+import { playSound } from "./sound";
 
 type Props = {
   state: GameState;
@@ -191,7 +192,23 @@ function ResultView({
 export default function StudentView({ state, send, onLeave }: Props) {
   const openSlot = state.grid.find((slot) => slot.faceUp);
   const revealRatio = useCountdown(state.revealEndsAt, state.serverTime);
+  // 카드를 연 뒤 자동 공개까지 남은 시간. 방 전체가 같은 값을 보고 함께 기다린다.
+  const judgeRatio = useCountdown(state.judgeEndsAt, state.serverTime);
+  const judgeSecondsLeft = Math.max(0, Math.ceil(judgeRatio * state.config.judgeSeconds));
   const wasMyTurn = useRef(false);
+  const previousPhase = useRef(state.phase);
+
+  // 한 사람이 카드를 열면 서버 상태가 방 전체에 전파된다. 모든 기기에서 같은 타이밍에
+  // 카드·안전·폭탄 효과음을 재생해 함께 게임하는 느낌을 준다.
+  useEffect(() => {
+    const previous = previousPhase.current;
+    if (previous !== state.phase) {
+      if (state.phase === "judge") playSound("card");
+      if (state.phase === "reveal") playSound(openSlot?.safe ? "safe" : "bomb");
+      if (state.phase === "finished") playSound("win");
+    }
+    previousPhase.current = state.phase;
+  }, [openSlot?.safe, state.phase]);
 
   // 태블릿에서 자기 차례가 오면 진동으로 알려 준다.
   useEffect(() => {
@@ -290,7 +307,14 @@ export default function StudentView({ state, send, onLeave }: Props) {
         <div className="stage stage-roll">
           <Dice value={state.dice} rolling={false} />
           {state.isMyTurn ? (
-            <button type="button" className="primary big" onClick={() => send({ type: "roll_dice" })}>
+            <button
+              type="button"
+              className="primary big"
+              onClick={() => {
+                playSound("dice");
+                send({ type: "roll_dice" });
+              }}
+            >
               주사위 굴리기
             </button>
           ) : (
@@ -299,7 +323,7 @@ export default function StudentView({ state, send, onLeave }: Props) {
         </div>
       )}
 
-      {/* 카드 공개 · 판정 단계 */}
+      {/* 카드 공개 · 자동 판정 단계 */}
       {(state.phase === "judge" || state.phase === "reveal") && openSlot && (
         <div className="stage">
           <CardStage slot={openSlot} phase={state.phase} />
@@ -308,29 +332,16 @@ export default function StudentView({ state, send, onLeave }: Props) {
               <span style={{ transform: `scaleX(${revealRatio})` }} />
             </div>
           )}
-          {state.phase === "judge" &&
-            (state.isMyTurn ? (
-              <div className="judge-buttons">
-                <button
-                  type="button"
-                  className="judge judge-yes"
-                  onClick={() => send({ type: "judge", answer: "O" })}
-                >
-                  <span className="judge-icon">⭕</span>
-                  맞아요
-                </button>
-                <button
-                  type="button"
-                  className="judge judge-no"
-                  onClick={() => send({ type: "judge", answer: "X" })}
-                >
-                  <span className="judge-icon">💣</span>
-                  폭탄이에요
-                </button>
+          {state.phase === "judge" && (
+            <div className="judge-countdown" role="timer" aria-live="off">
+              <p className="judge-countdown-room">👀 방 친구 모두에게 공개 중</p>
+              <p className="judge-countdown-hint">모둠 친구들과 정답을 예상해 보세요!</p>
+              <div className="judge-countdown-bar">
+                <span style={{ transform: `scaleX(${judgeRatio})` }} />
               </div>
-            ) : (
-              <p className="muted">{state.currentPlayerName}이(가) 판정하고 있어요.</p>
-            ))}
+              <p className="judge-countdown-number">⏳ {judgeSecondsLeft}초 후 자동 판정</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -366,7 +377,10 @@ export default function StudentView({ state, send, onLeave }: Props) {
                 pickable ? "is-pickable" : "",
               ].join(" ")}
               disabled={!pickable}
-              onClick={() => send({ type: "pick_card", index: slot.index })}
+              onClick={() => {
+                playSound("tap");
+                send({ type: "pick_card", index: slot.index });
+              }}
               aria-label={slot.empty ? "빈 자리" : isOpen ? slot.text : "뒤집힌 카드"}
             >
               {slot.empty ? "" : isOpen ? "🔍" : "?"}
