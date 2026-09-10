@@ -995,6 +995,192 @@ input:not([type]) {
   gap: 10px;
 }
 
+/* ── 게임 안내 모달 ─────────────────────────────────── */
+
+.guide-backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(3, 6, 22, 0.8);
+  backdrop-filter: blur(12px);
+}
+
+.guide-dialog {
+  width: min(100%, 620px);
+  max-height: min(92vh, 760px);
+  overflow: auto;
+  padding: clamp(20px, 4vw, 32px);
+  border: 1px solid rgba(84, 230, 255, 0.42);
+  border-radius: 24px;
+  background: linear-gradient(145deg, #182650, #0c1431 70%);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48), 0 0 40px rgba(84, 230, 255, 0.13);
+}
+
+.guide-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.guide-eyebrow {
+  margin: 0 0 6px;
+  color: var(--cyan);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.guide-dialog h2 {
+  margin: 0;
+  font-size: clamp(1.55rem, 5vw, 2.1rem);
+  letter-spacing: -0.05em;
+}
+
+.guide-close {
+  flex-shrink: 0;
+  min-width: 60px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #3a4d82;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+  font-weight: 800;
+}
+
+.guide-close:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.guide-steps {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+  counter-reset: guide-step;
+}
+
+.guide-steps li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 13px 14px 13px 10px;
+  border: 1px solid rgba(166, 140, 255, 0.2);
+  border-radius: 14px;
+  background: rgba(8, 15, 39, 0.52);
+  counter-increment: guide-step;
+}
+
+.guide-steps li::before {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--violet), var(--cyan));
+  color: #081027;
+  content: counter(guide-step);
+  font-size: 0.9rem;
+  font-weight: 950;
+}
+
+.guide-steps strong,
+.guide-steps span {
+  grid-column: 2;
+  display: block;
+}
+
+.guide-steps strong {
+  margin-top: 2px;
+  font-size: 1rem;
+}
+
+.guide-steps span {
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  word-break: keep-all;
+}
+
+.guide-video {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 211, 77, 0.55);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255, 211, 77, 0.15), rgba(166, 140, 255, 0.12));
+  color: var(--text);
+  text-decoration: none;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.guide-video:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  background: linear-gradient(135deg, rgba(255, 211, 77, 0.23), rgba(166, 140, 255, 0.18));
+}
+
+.guide-video-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 50%;
+  background: #ff334b;
+  color: #fff;
+  font-size: 0.95rem;
+  box-shadow: 0 5px 16px rgba(255, 51, 75, 0.28);
+}
+
+.guide-video-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.guide-video-copy strong,
+.guide-video-copy small {
+  display: block;
+}
+
+.guide-video-copy strong {
+  font-size: 1rem;
+}
+
+.guide-video-copy small {
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+.guide-video-arrow {
+  color: var(--accent);
+  font-size: 1.4rem;
+  font-weight: 900;
+}
+
+.guide-note {
+  margin: 16px 0 0;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  word-break: keep-all;
+}
+
 /* ── 선생님 화면 ────────────────────────────────────── */
 
 .teacher {

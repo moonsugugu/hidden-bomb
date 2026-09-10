@@ -27,6 +27,7 @@ type Target = {
 };
 
 const MAX_RETRY_DELAY_MS = 8_000;
+const ORIGINAL_VIDEO_URL = "https://www.youtube.com/watch?v=LBD1a_c2SIY";
 
 /** QR로 들어오면 주소에 방 코드가 붙어 있다. */
 function roomFromUrl() {
@@ -193,6 +194,17 @@ export default function App() {
 }
 
 function Shell({ children, error }: { children: React.ReactNode; error: string }) {
+  const [guideOpen, setGuideOpen] = useState(false);
+
+  useEffect(() => {
+    if (!guideOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setGuideOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [guideOpen]);
+
   return (
     <div className="shell" onPointerDownCapture={unlockAudio}>
       <header className="brand-bar">
@@ -205,10 +217,95 @@ function Shell({ children, error }: { children: React.ReactNode; error: string }
         </div>
         <div className="brand-right">
           <BrandLinks />
+          <button
+            type="button"
+            className="guide-button"
+            aria-haspopup="dialog"
+            aria-expanded={guideOpen}
+            onClick={() => setGuideOpen(true)}
+          >
+            🎮 게임하는 법
+          </button>
         </div>
       </header>
       {error && <p className="error-bar">{error}</p>}
       <main className="shell-main">{children}</main>
+      {guideOpen && <HowToPlayDialog onClose={() => setGuideOpen(false)} />}
+    </div>
+  );
+}
+
+function HowToPlayDialog({ onClose }: { onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
+  return (
+    <div
+      className="guide-backdrop"
+      role="presentation"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section className="guide-dialog" role="dialog" aria-modal="true" aria-labelledby="guide-title">
+        <header className="guide-dialog-head">
+          <div>
+            <p className="guide-eyebrow">HIDDENBOMB PLAYBOOK</p>
+            <h2 id="guide-title">히든밤 게임하는 법</h2>
+          </div>
+          <button
+            ref={closeRef}
+            type="button"
+            className="guide-close"
+            aria-label="게임하는 법 닫기"
+            onClick={onClose}
+          >
+            닫기
+          </button>
+        </header>
+
+        <ol className="guide-steps">
+          <li>
+            <strong>방 만들기</strong>
+            <span>선생님이 방을 만들고 QR 또는 방 코드를 친구들에게 알려 줘요.</span>
+          </li>
+          <li>
+            <strong>주사위 굴리기</strong>
+            <span>내 차례가 되면 주사위를 굴린 숫자만큼 카드를 이어서 골라요.</span>
+          </li>
+          <li>
+            <strong>같이 예상하기</strong>
+            <span>누군가 연 문제는 방 안의 친구 모두에게 보이고, 정답을 함께 예상해요.</span>
+          </li>
+          <li>
+            <strong>자동 판정</strong>
+            <span>설정한 시간이 지나면 카드가 자동으로 안전 또는 폭탄 판정을 받아요.</span>
+          </li>
+        </ol>
+
+        <a
+          className="guide-video"
+          href={ORIGINAL_VIDEO_URL}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <span className="guide-video-icon" aria-hidden="true">
+            ▶
+          </span>
+          <span className="guide-video-copy">
+            <strong>오리지널 히든밤 놀이 영상</strong>
+            <small>YouTube에서 실제 놀이 모습 보기</small>
+          </span>
+          <span className="guide-video-arrow" aria-hidden="true">
+            ↗
+          </span>
+        </a>
+
+        <p className="guide-note">💡 폭탄을 밟으면 그 차례는 끝나고, 안전한 카드는 다음 카드를 계속 고를 수 있어요.</p>
+      </section>
     </div>
   );
 }
