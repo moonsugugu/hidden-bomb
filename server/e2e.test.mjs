@@ -128,6 +128,68 @@ test("학생이 방 코드로 들어가고 선생님 화면에 바로 보인다"
   teacher.close();
 });
 
+test("선생님은 방의 인원을 차지하지 않고 어느 모둠이나 관전할 수 있다", async () => {
+  const teacher = client({ room: "NEW", role: "teacher" });
+  await teacher.opened();
+  teacher.send({ type: "create_hub", teacherName: "문수쌤", roomCount: 2 });
+  const hubState = await teacher.wait((m) => m.type === "hub_state", "hub_state");
+  const roomCode = hubState.rooms[1].code;
+
+  const spectator = client({
+    room: roomCode,
+    role: "teacher",
+    watch: 1,
+    hub: hubState.hub.code,
+    teacherId: hubState.hub.teacherId,
+  });
+  await spectator.opened();
+  const connected = await spectator.wait(
+    (m) => m.type === "connected" && m.role === "spectator",
+    "관전 연결",
+  );
+  assert.equal(connected.room, roomCode);
+  const lobby = await spectator.wait(
+    (m) => m.type === "state" && m.spectator === true,
+    "관전 상태",
+  );
+  assert.equal(lobby.players.length, 0);
+
+  const alpha = client({ room: roomCode, name: "가람" });
+  const beta = client({ room: roomCode, name: "나은" });
+  await alpha.opened();
+  await alpha.wait((m) => m.type === "connected" && m.playerId, "가람 입장");
+  await beta.opened();
+  await beta.wait((m) => m.type === "connected" && m.playerId, "나은 입장");
+  const seen = await spectator.wait(
+    (m) => m.type === "state" && m.spectator === true && m.players.length === 2,
+    "학생 입장 관전",
+  );
+  assert.equal(seen.players.length, 2);
+
+  teacher.send({ type: "teacher_action", roomCode, action: "start" });
+  const playing = await spectator.wait(
+    (m) => m.type === "state" && m.spectator === true && m.phase === "roll",
+    "게임 관전",
+  );
+  assert.equal(playing.isMyTurn, false);
+  assert.equal(playing.isHost, false);
+
+  spectator.send({ type: "roll_dice" });
+  const blocked = await spectator.wait((m) => m.type === "error", "관전 조작 차단");
+  assert.match(blocked.message, /관전/);
+
+  const dashboard = await teacher.wait(
+    (m) => m.type === "hub_state" && m.rooms[1].connectedCount === 2,
+    "관전자가 인원으로 세어지지 않음",
+  );
+  assert.equal(dashboard.rooms[1].connectedCount, 2);
+
+  alpha.close();
+  beta.close();
+  spectator.close();
+  teacher.close();
+});
+
 test("주사위 → 카드 선택 → 자동 판정 흐름이 끝까지 동작한다", async () => {
   const teacher = client({ room: "NEW", role: "teacher" });
   await teacher.opened();

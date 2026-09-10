@@ -710,7 +710,7 @@ export class BombRoom {
     };
   }
 
-  snapshotFor(viewerId) {
+  snapshotFor(viewerId, { spectator = false } = {}) {
     const currentId = this.currentPlayerId();
     return {
       type: "state",
@@ -718,6 +718,7 @@ export class BombRoom {
       label: this.label,
       kind: this.kind,
       hubCode: this.hubCode,
+      spectator,
       phase: this.phase,
       round: this.round,
       config: this.settingsConfig(),
@@ -729,10 +730,10 @@ export class BombRoom {
       currentPlayerId: currentId,
       currentPlayerName: this.getPlayer(currentId)?.name || "",
       // 이 기기가 지금 조작할 수 있는지. 모둠 1기기 모드에서는 같은 기기의 친구 차례도 포함된다.
-      isMyTurn: this.controls(viewerId, currentId),
+      isMyTurn: spectator ? false : this.controls(viewerId, currentId),
       // 한 기기를 여러 명이 나눠 쓰는 중인지. 화면에 "기기를 넘겨 주세요"를 띄우는 데 쓴다.
-      sharedDevice: this.groupOf(viewerId).length > 1,
-      isHost: this.canHost(viewerId),
+      sharedDevice: spectator ? false : this.groupOf(viewerId).length > 1,
+      isHost: spectator ? false : this.canHost(viewerId),
       deckLeft: this.deck.length,
       cardsRemaining: this.cardsRemaining(),
       turnResult: this.turnResult,

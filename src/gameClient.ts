@@ -68,7 +68,7 @@ export function clearSession() {
 export function openGameSocket(
   room: string,
   name: string,
-  options: { role?: "teacher"; names?: string[] } = {},
+  options: { role?: "teacher"; names?: string[]; hubCode?: string; spectator?: boolean } = {},
 ) {
   const url = new URL(gameWebSocketBase());
   url.searchParams.set("room", room || "NEW");
@@ -79,6 +79,8 @@ export function openGameSocket(
     url.searchParams.set("names", options.names.join(","));
   if (options.role === "teacher") {
     url.searchParams.set("role", "teacher");
+    if (options.hubCode) url.searchParams.set("hub", options.hubCode);
+    if (options.spectator) url.searchParams.set("watch", "1");
     const teacherId = savedTeacherId(room);
     if (teacherId) url.searchParams.set("teacherId", teacherId);
   } else {
@@ -103,4 +105,13 @@ export function isHubState(message: ServerMessage): message is HubState {
 /** 학생이 QR로 들어올 때 쓰는 주소. */
 export function joinUrl(roomCode: string) {
   return `${window.location.origin}/?room=${roomCode}`;
+}
+
+/** 선생님 대시보드에서 특정 모둠을 새 탭으로 관전할 때 쓰는 주소. */
+export function spectateUrl(roomCode: string, hubCode: string) {
+  const url = new URL(window.location.origin);
+  url.searchParams.set("room", roomCode);
+  url.searchParams.set("hub", hubCode);
+  url.searchParams.set("watch", "1");
+  return url.toString();
 }

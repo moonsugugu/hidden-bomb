@@ -16,12 +16,14 @@ import StudentView from "./StudentView";
 import TeacherView from "./TeacherView";
 import { unlockAudio } from "./sound";
 
-type Mode = "home" | "student" | "teacher";
+type Mode = "home" | "student" | "teacher" | "spectator";
 type Target = {
   room: string;
   name: string;
   role: "student" | "teacher";
   roomCount?: number;
+  hubCode?: string;
+  spectator?: boolean;
   /** 모둠 1기기 모드에서 이 기기로 함께 들어오는 사람들. */
   names?: string[];
 };
@@ -33,6 +35,14 @@ const ORIGINAL_VIDEO_URL = "https://www.youtube.com/watch?v=LBD1a_c2SIY";
 function roomFromUrl() {
   const params = new URLSearchParams(window.location.search);
   return (params.get("room") || "").trim().toUpperCase();
+}
+
+function watchFromUrl() {
+  return new URLSearchParams(window.location.search).get("watch") === "1";
+}
+
+function hubFromUrl() {
+  return (new URLSearchParams(window.location.search).get("hub") || "").trim().toUpperCase();
 }
 
 export default function App() {
@@ -70,6 +80,8 @@ export default function App() {
     const socket = openGameSocket(target.room, target.name, {
       role: target.role === "teacher" ? "teacher" : undefined,
       names: target.names,
+      hubCode: target.hubCode,
+      spectator: target.spectator,
     });
     socketRef.current = socket;
 
@@ -97,7 +109,7 @@ export default function App() {
 
       if (isGameState(message)) {
         setGameState(message);
-        setMode("student");
+        setMode(target.spectator ? "spectator" : "student");
         return;
       }
       if (isHubState(message)) {
@@ -117,9 +129,9 @@ export default function App() {
             rememberSession("teacher", message.hub ?? target.room, target.name);
           }
           // 방을 새로 만든 뒤에는 그 방 코드로 다시 붙어야 재접속이 된다.
-          if (message.room && message.room !== "NEW" && targetRef.current)
+          if (message.room && message.room !== "NEW" && targetRef.current && !target.spectator)
             targetRef.current = { ...targetRef.current, room: message.room };
-          if (message.hub && targetRef.current)
+          if (message.hub && targetRef.current && !target.spectator)
             targetRef.current = { ...targetRef.current, room: message.hub };
           break;
         case "error":
@@ -162,6 +174,20 @@ export default function App() {
 
   useEffect(() => () => teardown(), [teardown]);
 
+  // 선생님 대시보드의 "관전" 링크는 새 탭에서 이 주소로 자동 입장한다.
+  useEffect(() => {
+    const room = roomFromUrl();
+    if (!room || !watchFromUrl()) return;
+    const previous = lastSession();
+    connect({
+      room,
+      name: previous?.kind === "teacher" ? previous.name : "선생님",
+      role: "teacher",
+      hubCode: hubFromUrl(),
+      spectator: true,
+    });
+  }, [connect]);
+
   const leave = () => {
     teardown();
     clearSession();
@@ -183,6 +209,13 @@ export default function App() {
     return (
       <Shell error={error}>
         <StudentView state={gameState} send={send} onLeave={leave} />
+      </Shell>
+    );
+
+  if (mode === "spectator" && gameState)
+    return (
+      <Shell error={error}>
+        <StudentView state={gameState} send={send} onLeave={leave} spectator />
       </Shell>
     );
 
@@ -357,9 +390,7 @@ function Home({
             히든밤
           </h1>
           <p>
-            친구가 연 문제를 <strong>방 안의 친구 모두가 함께 보고</strong>,
-            <br />
-            {" "}잠깐 생각한 뒤 자동으로 폭탄을 찾아요.
+            주사위가 나온 만큼 폭탄을 피해 <strong>정답 카드를 연속으로 찾아요!</strong>
           </p>
           <div className="home-badges" aria-label="히든밤 게임 특징">
             <span>👀 모두 함께 보기</span>

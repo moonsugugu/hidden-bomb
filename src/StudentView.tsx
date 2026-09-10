@@ -8,6 +8,7 @@ type Props = {
   state: GameState;
   send: (message: Record<string, unknown>) => void;
   onLeave: () => void;
+  spectator?: boolean;
 };
 
 /** 서버가 정한 종료 시각까지 남은 비율(0~1). 공개 시간이 얼마나 남았는지 보여 준다. */
@@ -189,7 +190,7 @@ function ResultView({
   );
 }
 
-export default function StudentView({ state, send, onLeave }: Props) {
+export default function StudentView({ state, send, onLeave, spectator = false }: Props) {
   const openSlot = state.grid.find((slot) => slot.faceUp);
   const revealRatio = useCountdown(state.revealEndsAt, state.serverTime);
   // 카드를 연 뒤 자동 공개까지 남은 시간. 방 전체가 같은 값을 보고 함께 기다린다.
@@ -234,6 +235,9 @@ export default function StudentView({ state, send, onLeave }: Props) {
           <p className="lobby-count">
             {ready}명 / 최소 {state.minPlayers}명 · 최대 {state.maxPlayers}명
           </p>
+          {spectator && (
+            <p className="spectator-banner">👀 선생님 관전 중 · 학생들이 모이는 모습을 보고 있어요.</p>
+          )}
           <ul className="lobby-players">
             {state.players.map((player) => (
               <li key={player.id} className={player.sameDevice ? "is-me" : ""}>
@@ -256,7 +260,11 @@ export default function StudentView({ state, send, onLeave }: Props) {
               {ready < state.minPlayers ? `${state.minPlayers}명이 모여야 시작해요` : "게임 시작!"}
             </button>
           ) : (
-            <p className="muted">선생님이 시작하기를 기다리는 중이에요.</p>
+            <p className="muted">
+              {spectator
+                ? "학생들이 모이고 게임이 시작되기를 기다리는 중이에요."
+                : "선생님이 시작하기를 기다리는 중이에요."}
+            </p>
           )}
           <button type="button" className="ghost small" onClick={onLeave}>
             나가기
@@ -284,6 +292,10 @@ export default function StudentView({ state, send, onLeave }: Props) {
       </header>
 
       <Scoreboard state={state} />
+
+      {spectator && (
+        <p className="spectator-banner">👀 선생님 관전 모드 · 이 방의 게임 화면을 함께 보고 있어요.</p>
+      )}
 
       {state.sharedDevice && state.isMyTurn && state.phase === "roll" && (
         <p className="handover">🔄 {state.currentPlayerName}에게 기기를 넘겨 주세요</p>

@@ -558,6 +558,17 @@ input:not([type]) {
   text-align: center;
 }
 
+.spectator-banner {
+  margin: 0 0 12px;
+  padding: 11px 16px;
+  border: 2px solid var(--cyan);
+  border-radius: var(--radius);
+  background: rgba(84, 230, 255, 0.1);
+  color: var(--cyan);
+  font-weight: 800;
+  text-align: center;
+}
+
 .mate-inputs {
   display: grid;
   gap: 8px;
@@ -1370,6 +1381,13 @@ input:not([type]) {
   gap: 8px;
   margin-top: 12px;
   flex-wrap: wrap;
+}
+
+.room-watch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
 
 .room-manage {

@@ -17,7 +17,7 @@ import {
   questionShortfall,
 } from "./labels";
 import { downloadBombReport, downloadTemplate, parseQuestionFile } from "./excel";
-import { joinUrl } from "./gameClient";
+import { joinUrl, spectateUrl } from "./gameClient";
 
 type Props = {
   state: HubState;
@@ -285,10 +285,12 @@ function SettingsPanel({
 function RoomCard({
   room,
   qr,
+  hubCode,
   send,
 }: {
   room: RoomSummary;
   qr?: string;
+  hubCode: string;
   send: Props["send"];
 }) {
   const [copied, setCopied] = useState(false);
@@ -355,6 +357,15 @@ function RoomCard({
       </div>
 
       <footer className="room-card-actions">
+        <a
+          className="small ghost room-watch"
+          href={spectateUrl(room.code, hubCode)}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`${room.label} 관전하기`}
+        >
+          👀 관전
+        </a>
         {room.phase === "lobby" && (
           <button
             type="button"
@@ -474,7 +485,13 @@ export default function TeacherView({ state, send, onLeave, notice }: Props) {
         <div className="teacher-main">
           <div className="room-grid">
             {state.rooms.map((room) => (
-              <RoomCard key={room.code} room={room} qr={qrCodes[room.code]} send={send} />
+              <RoomCard
+                key={room.code}
+                room={room}
+                hubCode={state.hub.code}
+                qr={qrCodes[room.code]}
+                send={send}
+              />
             ))}
           </div>
 

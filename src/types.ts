@@ -94,6 +94,8 @@ export type GameState = {
   label: string;
   kind: string;
   hubCode: string | null;
+  /** 선생님이 학생 화면을 조작하지 않고 지켜보는 관전 연결인지. */
+  spectator: boolean;
   phase: Phase;
   round: number;
   config: Config;

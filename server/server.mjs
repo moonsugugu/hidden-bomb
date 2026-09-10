@@ -23,6 +23,7 @@ const ROOM_TTL_MS = 60_000;
 const rooms = new Map();
 const hubs = new Map();
 const socketsByRoom = new Map();
+const spectatorsByRoom = new Map();
 const socketsByHub = new Map();
 
 function send(socket, payload) {
@@ -50,6 +51,11 @@ function roomSockets(code) {
   return socketsByRoom.get(code);
 }
 
+function spectatorSockets(code) {
+  if (!spectatorsByRoom.has(code)) spectatorsByRoom.set(code, new Map());
+  return spectatorsByRoom.get(code);
+}
+
 function hubSockets(code) {
   if (!socketsByHub.has(code)) socketsByHub.set(code, new Map());
   return socketsByHub.get(code);
@@ -59,6 +65,9 @@ function broadcastRoom(room) {
   if (!room) return;
   const sockets = socketsByRoom.get(room.code);
   if (sockets) for (const [playerId, socket] of sockets) send(socket, room.snapshotFor(playerId));
+  const spectators = spectatorsByRoom.get(room.code);
+  if (spectators)
+    for (const socket of spectators.values()) send(socket, room.snapshotFor(null, { spectator: true }));
   if (room.hubCode) broadcastHub(hubs.get(room.hubCode));
 }
 
@@ -92,7 +101,22 @@ function bindHubSocket(socket, hub) {
   socket.teacherId = hub.teacherId;
 }
 
+function bindSpectatorSocket(socket, room) {
+  const key = randomUUID();
+  spectatorSockets(room.code).set(key, socket);
+  socket.roomCode = room.code;
+  socket.spectatorKey = key;
+  socket.spectator = true;
+}
+
 function detachSocket(socket) {
+  if (socket.spectator) {
+    const spectators = spectatorsByRoom.get(socket.roomCode);
+    if (spectators?.get(socket.spectatorKey) === socket) spectators.delete(socket.spectatorKey);
+    if (spectators && spectators.size === 0) spectatorsByRoom.delete(socket.roomCode);
+    return;
+  }
+
   const room = rooms.get(socket.roomCode);
   const roomMap = socketsByRoom.get(socket.roomCode);
   if (roomMap?.get(socket.playerId) === socket) roomMap.delete(socket.playerId);
@@ -165,6 +189,7 @@ function handleTeacherInput(socket, message) {
       if (!result.ok) return send(socket, { type: "error", message: result.error });
       rooms.delete(result.code);
       socketsByRoom.delete(result.code);
+      spectatorsByRoom.delete(result.code);
       return broadcastHub(hub);
     }
     case "apply_all": {
@@ -221,6 +246,26 @@ function attachExistingHub(socket) {
     role: "teacher",
   });
   broadcastHub(hub);
+}
+
+function attachExistingRoomSpectator(socket) {
+  const room = rooms.get(normalizeRoomCode(socket.requestedRoom));
+  const hub = hubs.get(normalizeRoomCode(socket.requestedHub));
+  if (!room || !hub || room.hubCode !== hub.code)
+    return errorAndClose(socket, "관전할 모둠 방을 찾을 수 없어요. 방 코드를 확인해 주세요.");
+  if (socket.requestedTeacherId !== hub.teacherId)
+    return errorAndClose(socket, "선생님 관전 인증 정보가 맞지 않아요.");
+
+  bindSpectatorSocket(socket, room);
+  send(socket, {
+    type: "connected",
+    room: room.code,
+    hub: hub.code,
+    teacherId: hub.teacherId,
+    game: GAME_NAME,
+    role: "spectator",
+  });
+  send(socket, room.snapshotFor(null, { spectator: true }));
 }
 
 function attachExistingRoom(socket) {
@@ -299,6 +344,8 @@ websocketServer.on("connection", (socket, _request, url) => {
     .slice(0, MAX_PLAYERS);
   socket.requestedPlayerId = url.searchParams.get("playerId") || "";
   socket.requestedTeacherId = url.searchParams.get("teacherId") || "";
+  socket.requestedHub = url.searchParams.get("hub") || "";
+  socket.requestedWatch = url.searchParams.get("watch") === "1";
   socket.requestedRole = url.searchParams.get("role") || "student";
 
   send(socket, {
@@ -309,7 +356,9 @@ websocketServer.on("connection", (socket, _request, url) => {
   });
 
   if (socket.requestedRoom !== "NEW") {
-    if (socket.requestedRole === "teacher") attachExistingHub(socket);
+    if (socket.requestedRole === "teacher" && socket.requestedWatch)
+      attachExistingRoomSpectator(socket);
+    else if (socket.requestedRole === "teacher") attachExistingHub(socket);
     else attachExistingRoom(socket);
   }
 
@@ -324,6 +373,8 @@ websocketServer.on("connection", (socket, _request, url) => {
       return handleCreateRoom(socket, message);
     if (!socket.roomCode && !socket.hubCode && message.type === "create_hub")
       return handleCreateHub(socket, message);
+    if (socket.spectator)
+      return send(socket, { type: "error", message: "관전 중에는 게임을 조작할 수 없어요." });
     if (socket.hubCode) return handleTeacherInput(socket, message);
     if (socket.roomCode) return handleStudentInput(socket, message);
     send(socket, { type: "error", message: "먼저 방을 만들거나 통합방을 만들어 주세요." });
@@ -362,7 +413,11 @@ setInterval(() => {
     if (hub.emptySince && now - hub.emptySince > ROOM_TTL_MS) {
       hubs.delete(code);
       socketsByHub.delete(code);
-      for (const [roomCode, room] of rooms) if (room.hubCode === code) rooms.delete(roomCode);
+      for (const [roomCode, room] of rooms)
+        if (room.hubCode === code) {
+          rooms.delete(roomCode);
+          spectatorsByRoom.delete(roomCode);
+        }
     }
   }
 }, 30_000).unref();
