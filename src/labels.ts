@@ -1,4 +1,13 @@
-import type { Config, GradeBand, Operation, Phase, QuestionType, Subject } from "./types";
+import type { Config, GradeBand, GradeLevel, Operation, Phase, QuestionType, Subject } from "./types";
+
+export const GRADE_LEVELS: { value: GradeLevel; label: string }[] = [
+  { value: 1, label: "1학년" },
+  { value: 2, label: "2학년" },
+  { value: 3, label: "3학년" },
+  { value: 4, label: "4학년" },
+  { value: 5, label: "5학년" },
+  { value: 6, label: "6학년" },
+];
 
 export const GRADE_BANDS: { value: GradeBand; label: string }[] = [
   { value: "g12", label: "1~2학년" },
@@ -64,6 +73,19 @@ export const SCORING_OPTIONS = [
 export const G12_INTEGRATED_NOTE =
   "1~2학년은 과학·사회 교과가 없어 통합교과(봄·여름·가을·겨울) 수준의 문장으로 나와요.";
 
+// server/bomb-game.mjs의 기본값과 맞춰야 한다.
+export const DEFAULT_JUDGE_SECONDS = 6;
+
+export function gradeBandForLevel(level: GradeLevel | number): GradeBand {
+  if (Number(level) <= 2) return "g12";
+  if (Number(level) <= 4) return "g34";
+  return "g56";
+}
+
+export function gradeLevelLabel(value: GradeLevel | number) {
+  return GRADE_LEVELS.find((item) => item.value === Number(value))?.label ?? `${value}학년`;
+}
+
 export function subjectLabel(value: Subject) {
   return SUBJECTS.find((item) => item.value === value)?.label ?? value;
 }
@@ -91,11 +113,12 @@ export function questionShortfall(config: Config) {
 export function describeConfig(config: {
   questionType: QuestionType;
   gradeBand: GradeBand;
+  gradeLevel?: GradeLevel | number;
   subject: Subject;
   operations: Operation[];
   customCount: number;
 }) {
-  const grade = gradeBandLabel(config.gradeBand);
+  const grade = config.gradeLevel ? gradeLevelLabel(config.gradeLevel) : gradeBandLabel(config.gradeBand);
   if (config.questionType === "arithmetic") {
     const signs = config.operations
       .map((op) => OPERATIONS.find((item) => item.value === op)?.sign ?? "")

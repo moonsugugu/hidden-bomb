@@ -1,4 +1,5 @@
 export type GradeBand = "g12" | "g34" | "g56";
+export type GradeLevel = 1 | 2 | 3 | 4 | 5 | 6;
 export type Subject = "math" | "science" | "social" | "korean" | "english";
 export type Operation = "add" | "sub" | "mul" | "div";
 export type QuestionType = "arithmetic" | "spelling" | "proposition" | "custom";
@@ -16,6 +17,8 @@ export type Phase =
 export type Config = {
   questionType: QuestionType;
   gradeBand: GradeBand;
+  /** 화면에서 고르는 세부 학년. 인접 학년군 문제은행과 함께 사용한다. */
+  gradeLevel: GradeLevel;
   subject: Subject;
   operations: Operation[];
   gridSize: number;
@@ -120,6 +123,8 @@ export type GameState = {
   turnDeadline: number | null;
   /** 카드를 연 뒤 자동 공개까지 남은 시각. 방 전체가 같은 값을 본다. */
   judgeEndsAt: number | null;
+  /** 현재 차례 친구가 살펴보는 카드의 자리. 방 전체에 같은 강조를 보낸다. */
+  highlightedIndex: number | null;
   minPlayers: number;
   maxPlayers: number;
   serverTime: number;

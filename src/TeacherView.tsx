@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
-import type { Config, GradeBand, HubState, Operation, QuestionType, RoomSummary, Subject } from "./types";
+import type {
+  Config,
+  GradeLevel,
+  HubState,
+  Operation,
+  QuestionType,
+  RoomSummary,
+  Subject,
+} from "./types";
 import {
   DICE_OPTIONS,
-  GRADE_BANDS,
+  DEFAULT_JUDGE_SECONDS,
+  GRADE_LEVELS,
   G12_INTEGRATED_NOTE,
   MAX_JUDGE_SECONDS,
   MIN_JUDGE_SECONDS,
@@ -14,6 +23,7 @@ import {
   SCORING_OPTIONS,
   SUBJECTS,
   describeConfig,
+  gradeBandForLevel,
   questionShortfall,
 } from "./labels";
 import { downloadBombReport, downloadTemplate, parseQuestionFile } from "./excel";
@@ -56,19 +66,34 @@ function useQrCodes(codes: string[]) {
 
 function SettingsPanel({
   config,
+  roomCode,
+  roomLabel,
+  roomOptions,
+  onRoomChange,
   onApply,
+  onApplyAll,
   disabled,
+  applyAllDisabled,
 }: {
   config: Config;
+  roomCode: string;
+  roomLabel: string;
+  roomOptions: { code: string; label: string }[];
+  onRoomChange: (code: string) => void;
   onApply: (next: Partial<Config>) => void;
+  onApplyAll: (next: Partial<Config>) => void;
   disabled: boolean;
+  applyAllDisabled: boolean;
 }) {
   const [draft, setDraft] = useState<Config>(config);
   const allowedOps = OPERATIONS_BY_BAND[draft.gradeBand];
   // 적용된 설정 기준으로 판단한다. 초안은 아직 서버가 문제 수를 세어 주지 않았다.
   const shortfall = questionShortfall(config);
+  // 학생 입장·점수·턴 변경으로 부모가 새 상태를 받아도, 같은 설정이면
+  // 선생님이 편집 중인 초안을 덮어쓰지 않는다. 방을 바꿀 때만 강제로 동기화한다.
+  const configSignature = JSON.stringify(config);
 
-  useEffect(() => setDraft(config), [config]);
+  useEffect(() => setDraft(config), [roomCode, configSignature]);
 
   const update = (patch: Partial<Config>) => {
     const next = { ...draft, ...patch };
@@ -77,8 +102,9 @@ function SettingsPanel({
     if (patch.questionType === "arithmetic") next.subject = "math";
     if (patch.questionType === "spelling") next.subject = "korean";
     // 학년군을 바꾸면 그 학년에 없는 연산은 자동으로 걸러 준다.
-    if (patch.gradeBand) {
-      const allowed = OPERATIONS_BY_BAND[patch.gradeBand];
+    if (patch.gradeLevel !== undefined) next.gradeBand = gradeBandForLevel(patch.gradeLevel);
+    if (patch.gradeBand || patch.gradeLevel !== undefined) {
+      const allowed = OPERATIONS_BY_BAND[next.gradeBand];
       next.operations = next.operations.filter((op) => allowed.includes(op));
       if (!next.operations.length) next.operations = allowed;
     }
@@ -94,13 +120,28 @@ function SettingsPanel({
   };
 
   const showIntegratedNote =
-    draft.gradeBand === "g12" &&
+    draft.gradeLevel <= 2 &&
     draft.questionType === "proposition" &&
     (draft.subject === "science" || draft.subject === "social");
 
   return (
     <section className="panel">
-      <h2 className="panel-title">문제 설정</h2>
+      <div className="settings-panel-head">
+        <div>
+          <h2 className="panel-title">방별 문제 설정</h2>
+          <p className="field-hint settings-target-copy">선택한 방: <strong>{roomLabel}</strong></p>
+        </div>
+        <label className="settings-room-picker">
+          <span>설정할 방</span>
+          <select value={roomCode} onChange={(event) => onRoomChange(event.target.value)}>
+            {roomOptions.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label} ({option.code})
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       <div className="field">
         <span className="field-label">문제 유형</span>
@@ -122,14 +163,14 @@ function SettingsPanel({
       </div>
 
       <div className="field">
-        <span className="field-label">학년군</span>
+        <span className="field-label">학년</span>
         <div className="chip-row">
-          {GRADE_BANDS.map((option) => (
+          {GRADE_LEVELS.map((option) => (
             <button
               key={option.value}
               type="button"
-              className={`chip ${draft.gradeBand === option.value ? "is-on" : ""}`}
-              onClick={() => update({ gradeBand: option.value as GradeBand })}
+              className={`chip ${draft.gradeLevel === option.value ? "is-on" : ""}`}
+              onClick={() => update({ gradeLevel: option.value as GradeLevel })}
             >
               {option.label}
             </button>
@@ -252,7 +293,7 @@ function SettingsPanel({
         <p className="field-hint">
           카드를 열면 문장이 방 전체에 보여요. 판정은 사람이 누르는 게 아니라 이 시간이 지나면
           서버가 카드의 실제 정답 그대로 자동으로 공개해요. 그동안 모둠 친구들과 함께 맞는지 얘기해
-          보세요. 기본값은 5초이며 {MIN_JUDGE_SECONDS}~{MAX_JUDGE_SECONDS}초 사이를 1초 단위로
+          보세요. 기본값은 {DEFAULT_JUDGE_SECONDS}초이며 {MIN_JUDGE_SECONDS}~{MAX_JUDGE_SECONDS}초 사이를 1초 단위로
           조절할 수 있어요.
         </p>
       </div>
@@ -297,15 +338,28 @@ function SettingsPanel({
         </p>
       )}
 
-      <button
-        type="button"
-        className="primary"
-        disabled={disabled}
-        onClick={() => onApply(draft)}
-      >
-        모든 모둠에 적용
-      </button>
-      {disabled && <p className="field-hint warn">진행 중인 모둠이 있어 지금은 바꿀 수 없어요.</p>}
+      <div className="settings-actions">
+        <button
+          type="button"
+          className="primary"
+          disabled={disabled}
+          onClick={() => onApply(draft)}
+        >
+          선택한 방에 적용
+        </button>
+        <button
+          type="button"
+          className="ghost"
+          disabled={applyAllDisabled}
+          onClick={() => onApplyAll(draft)}
+        >
+          모든 모둠에 적용
+        </button>
+      </div>
+      {disabled && <p className="field-hint warn">선택한 방이 진행 중이라 지금은 바꿀 수 없어요.</p>}
+      {!disabled && applyAllDisabled && (
+        <p className="field-hint warn">진행 중인 모둠이 있어 전체 적용은 잠시 잠겨 있어요.</p>
+      )}
     </section>
   );
 }
@@ -429,12 +483,22 @@ export default function TeacherView({ state, send, onLeave, notice }: Props) {
   const qrCodes = useQrCodes(codes);
   const [uploadMessage, setUploadMessage] = useState("");
   const [showQrSheet, setShowQrSheet] = useState(false);
+  const [settingsRoomCode, setSettingsRoomCode] = useState(state.rooms[0]?.code ?? "");
   const fileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!state.rooms.some((room) => room.code === settingsRoomCode))
+      setSettingsRoomCode(state.rooms[0]?.code ?? "");
+  }, [settingsRoomCode, state.rooms]);
 
   const anyPlaying = state.rooms.some(
     (room) => room.phase !== "lobby" && room.phase !== "finished",
   );
-  const baseConfig = state.rooms[0]?.config;
+  const settingsRoom =
+    state.rooms.find((room) => room.code === settingsRoomCode) ?? state.rooms[0];
+  const settingsRoomPlaying = Boolean(
+    settingsRoom && settingsRoom.phase !== "lobby" && settingsRoom.phase !== "finished",
+  );
 
   const handleUpload = async (file: File | undefined) => {
     if (!file) return;
@@ -549,11 +613,24 @@ export default function TeacherView({ state, send, onLeave, notice }: Props) {
         </div>
 
         <aside className="teacher-side">
-          {baseConfig && (
+          {settingsRoom && (
             <SettingsPanel
-              config={baseConfig}
-              disabled={anyPlaying}
-              onApply={(next) => send({ type: "apply_all", config: next })}
+              config={settingsRoom.config}
+              roomCode={settingsRoom.code}
+              roomLabel={settingsRoom.label}
+              roomOptions={state.rooms.map((room) => ({ code: room.code, label: room.label }))}
+              onRoomChange={setSettingsRoomCode}
+              disabled={settingsRoomPlaying}
+              applyAllDisabled={anyPlaying}
+              onApply={(next) =>
+                send({
+                  type: "teacher_action",
+                  roomCode: settingsRoom.code,
+                  action: "update_settings",
+                  config: next,
+                })
+              }
+              onApplyAll={(next) => send({ type: "apply_all", config: next })}
             />
           )}
 

@@ -78,6 +78,7 @@ function Dice({ value, rolling }: { value: number; rolling: boolean }) {
 function CardStage({ slot, phase }: { slot: GridSlot; phase: GameState["phase"] }) {
   const revealed = phase === "reveal";
   const safe = slot.safe;
+  const effect = revealed && safe ? ["✦", "✧", "✨", "✦"] : ["✹", "•", "💥", "✦"];
   return (
     <div
       className={[
@@ -87,11 +88,21 @@ function CardStage({ slot, phase }: { slot: GridSlot; phase: GameState["phase"] 
       role="status"
       aria-live="polite"
     >
+      {revealed && (
+        <div className={`card-effect ${safe ? "is-safe" : "is-bomb"}`} aria-hidden="true">
+          {effect.map((symbol, index) => (
+            <span key={`${symbol}-${index}`}>{symbol}</span>
+          ))}
+        </div>
+      )}
       <p className="card-stage-text">{slot.text}</p>
       {revealed && (
         <div className="card-stage-verdict">
           <p className="verdict-headline">
-            {safe ? "✅ 안전!" : "💣 폭탄!"}
+            <span className="verdict-icon" aria-hidden="true">
+              {safe ? "✅" : "💣"}
+            </span>
+            {safe ? " 안전!" : " 폭탄!"}
             <span className="verdict-truth">
               {slot.isTrue ? "이 문장은 맞아요" : "이 문장은 틀렸어요"}
             </span>
@@ -314,96 +325,120 @@ export default function StudentView({ state, send, onLeave, spectator = false }:
         )}
       </div>
 
-      {/* 주사위 단계 */}
-      {state.phase === "roll" && (
-        <div className="stage stage-roll">
-          <Dice value={state.dice} rolling={false} />
-          {state.isMyTurn ? (
-            <button
-              type="button"
-              className="primary big"
-              onClick={() => {
-                playSound("dice");
-                send({ type: "roll_dice" });
-              }}
-            >
-              주사위 굴리기
-            </button>
-          ) : (
-            <p className="muted">{state.currentPlayerName}이(가) 주사위를 굴리고 있어요.</p>
-          )}
-        </div>
-      )}
+      <div className="play-layout">
+        <section className="play-board" aria-label="문제판">
+          {/* 카드 격자 */}
+          <div className={`grid grid-${state.config.gridSize}`} aria-label="카드 격자">
+            {state.grid.map((slot) => {
+              const isOpen = Boolean(slot.faceUp);
+              const highlighted = state.highlightedIndex === slot.index;
+              const pickable = state.phase === "pick" && state.isMyTurn && !slot.empty;
+              const cardLabel = slot.empty
+                ? "빈 자리"
+                : isOpen
+                  ? slot.text
+                  : highlighted
+                    ? "친구가 살펴보는 카드"
+                    : "뒤집힌 카드";
+              return (
+                <button
+                  key={slot.index}
+                  type="button"
+                  className={[
+                    "card",
+                    slot.empty ? "is-empty" : "",
+                    isOpen ? "is-open" : "",
+                    pickable ? "is-pickable" : "",
+                    highlighted ? "is-highlighted" : "",
+                  ].join(" ")}
+                  disabled={!pickable}
+                  onPointerEnter={() => {
+                    if (pickable) send({ type: "preview_card", index: slot.index });
+                  }}
+                  onPointerLeave={() => {
+                    if (pickable) send({ type: "preview_card", index: null });
+                  }}
+                  onFocus={() => {
+                    if (pickable) send({ type: "preview_card", index: slot.index });
+                  }}
+                  onBlur={() => {
+                    if (pickable) send({ type: "preview_card", index: null });
+                  }}
+                  onClick={() => {
+                    playSound("tap");
+                    send({ type: "pick_card", index: slot.index });
+                  }}
+                  aria-label={cardLabel}
+                >
+                  {slot.empty ? "" : isOpen ? "🔍" : highlighted ? "👀" : "?"}
+                </button>
+              );
+            })}
+          </div>
 
-      {/* 카드 공개 · 자동 판정 단계 */}
-      {(state.phase === "judge" || state.phase === "reveal") && openSlot && (
-        <div className="stage">
-          <CardStage slot={openSlot} phase={state.phase} />
-          {state.phase === "reveal" && (
-            <div className="reveal-bar">
-              <span style={{ transform: `scaleX(${revealRatio})` }} />
+          {state.phase === "pick" && !state.isMyTurn && (
+            <p className="muted center">{state.currentPlayerName}이(가) 카드를 살펴보고 있어요.</p>
+          )}
+        </section>
+
+        <section className="play-question" aria-label="문제">
+          {/* 주사위 단계 */}
+          {state.phase === "roll" && (
+            <div className="stage stage-roll">
+              <Dice value={state.dice} rolling={false} />
+              {state.isMyTurn ? (
+                <button
+                  type="button"
+                  className="primary big"
+                  onClick={() => {
+                    playSound("dice");
+                    send({ type: "roll_dice" });
+                  }}
+                >
+                  주사위 굴리기
+                </button>
+              ) : (
+                <p className="muted">{state.currentPlayerName}이(가) 주사위를 굴리고 있어요.</p>
+              )}
             </div>
           )}
-          {state.phase === "judge" && (
-            <div className="judge-countdown" role="timer" aria-live="off">
-              <p className="judge-countdown-room">👀 방 친구 모두에게 공개 중</p>
-              <p className="judge-countdown-hint">모둠 친구들과 정답을 예상해 보세요!</p>
-              <div className="judge-countdown-bar">
-                <span style={{ transform: `scaleX(${judgeRatio})` }} />
-              </div>
-              <p className="judge-countdown-number">⏳ {judgeSecondsLeft}초 후 자동 판정</p>
+
+          {/* 카드 공개 · 자동 판정 단계 */}
+          {(state.phase === "judge" || state.phase === "reveal") && openSlot && (
+            <div className="stage">
+              <CardStage slot={openSlot} phase={state.phase} />
+              {state.phase === "reveal" && (
+                <div className="reveal-bar">
+                  <span style={{ transform: `scaleX(${revealRatio})` }} />
+                </div>
+              )}
+              {state.phase === "judge" && (
+                <div className="judge-countdown" role="timer" aria-live="off">
+                  <p className="judge-countdown-room">👀 방 친구 모두에게 공개 중</p>
+                  <p className="judge-countdown-hint">모둠 친구들과 정답을 예상해 보세요!</p>
+                  <div className="judge-countdown-bar">
+                    <span style={{ transform: `scaleX(${judgeRatio})` }} />
+                  </div>
+                  <p className="judge-countdown-number">⏳ {judgeSecondsLeft}초 후 자동 판정</p>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {/* 턴 결과 */}
-      {state.phase === "turnEnd" && state.turnResult && (
-        <div className={`stage turn-result ${state.turnResult.success ? "is-safe" : "is-bomb"}`}>
-          <p className="turn-result-title">
-            {state.turnResult.success ? "🎉 성공!" : "💥 폭탄!"}
-          </p>
-          <p className="turn-result-detail">
-            {state.turnResult.playerName} · {state.turnResult.cleared}/{state.turnResult.target}장 ·{" "}
-            <strong>+{state.turnResult.gained}점</strong>
-          </p>
-        </div>
-      )}
-
-      {/* 카드 격자 */}
-      <div
-        className={`grid grid-${state.config.gridSize}`}
-        aria-label="카드 격자"
-      >
-        {state.grid.map((slot) => {
-          const isOpen = Boolean(slot.faceUp);
-          const pickable = state.phase === "pick" && state.isMyTurn && !slot.empty;
-          return (
-            <button
-              key={slot.index}
-              type="button"
-              className={[
-                "card",
-                slot.empty ? "is-empty" : "",
-                isOpen ? "is-open" : "",
-                pickable ? "is-pickable" : "",
-              ].join(" ")}
-              disabled={!pickable}
-              onClick={() => {
-                playSound("tap");
-                send({ type: "pick_card", index: slot.index });
-              }}
-              aria-label={slot.empty ? "빈 자리" : isOpen ? slot.text : "뒤집힌 카드"}
-            >
-              {slot.empty ? "" : isOpen ? "🔍" : "?"}
-            </button>
-          );
-        })}
+          {/* 턴 결과 */}
+          {state.phase === "turnEnd" && state.turnResult && (
+            <div className={`stage turn-result ${state.turnResult.success ? "is-safe" : "is-bomb"}`}>
+              <p className="turn-result-title">
+                {state.turnResult.success ? "🎉 성공!" : "💥 폭탄!"}
+              </p>
+              <p className="turn-result-detail">
+                {state.turnResult.playerName} · {state.turnResult.cleared}/{state.turnResult.target}장 ·{" "}
+                <strong>+{state.turnResult.gained}점</strong>
+              </p>
+            </div>
+          )}
+        </section>
       </div>
-
-      {state.phase === "pick" && !state.isMyTurn && (
-        <p className="muted center">{state.currentPlayerName}이(가) 카드를 고르고 있어요.</p>
-      )}
     </div>
   );
 }

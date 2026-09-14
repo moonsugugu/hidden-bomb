@@ -590,6 +590,22 @@ input:not([type]) {
   background: var(--bg-panel);
 }
 
+.play-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.play-question {
+  order: 0;
+  min-width: 0;
+}
+
+.play-board {
+  order: 1;
+  min-width: 0;
+}
+
 .stage {
   margin-bottom: 16px;
 }
@@ -617,6 +633,9 @@ input:not([type]) {
 /* ── 열린 카드 ──────────────────────────────────────── */
 
 .card-stage {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   padding: 24px 20px;
   border-radius: 18px;
   background: #fff;
@@ -626,10 +645,14 @@ input:not([type]) {
 
 .card-stage.is-safe {
   border-color: var(--safe);
+  background: linear-gradient(145deg, #ffffff, #ecfdf5 68%, #d1fae5);
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.12), 0 0 34px rgba(74, 222, 128, 0.42);
 }
 
 .card-stage.is-bomb {
   border-color: var(--bomb);
+  background: linear-gradient(145deg, #fff, #fff1f2 64%, #fecdd3);
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.12), 0 0 34px rgba(248, 113, 113, 0.42);
   animation: shake 0.36s ease-in-out 1;
 }
 
@@ -643,6 +666,61 @@ input:not([type]) {
 @media (prefers-reduced-motion: reduce) {
   .card-stage.is-bomb {
     animation: none;
+  }
+}
+
+.card-effect {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+}
+
+.card-effect span {
+  position: absolute;
+  display: block;
+  font-size: clamp(1rem, 4vw, 2rem);
+  font-weight: 900;
+  opacity: 0;
+  animation: effect-float 1.55s ease-out both;
+}
+
+.card-effect.is-safe span {
+  color: #16a34a;
+  text-shadow: 0 0 12px rgba(34, 197, 94, 0.58);
+}
+
+.card-effect.is-safe span:nth-child(1) { left: 10%; top: 18%; animation-delay: 0.03s; }
+.card-effect.is-safe span:nth-child(2) { right: 13%; top: 22%; animation-delay: 0.12s; }
+.card-effect.is-safe span:nth-child(3) { left: 24%; bottom: 17%; animation-delay: 0.2s; }
+.card-effect.is-safe span:nth-child(4) { right: 24%; bottom: 14%; animation-delay: 0.28s; }
+
+.card-effect.is-bomb span {
+  color: #dc2626;
+  text-shadow: 0 0 12px rgba(239, 68, 68, 0.62);
+}
+
+.card-effect.is-bomb span:nth-child(1) { left: 10%; top: 19%; animation-delay: 0.02s; }
+.card-effect.is-bomb span:nth-child(2) { right: 13%; top: 17%; animation-delay: 0.08s; }
+.card-effect.is-bomb span:nth-child(3) { left: 44%; top: 6%; font-size: clamp(2rem, 8vw, 3.4rem); animation-delay: 0.01s; }
+.card-effect.is-bomb span:nth-child(4) { right: 25%; bottom: 12%; animation-delay: 0.18s; }
+
+.card-stage-text,
+.card-stage-verdict {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes effect-float {
+  0% { opacity: 0; transform: translateY(12px) scale(0.45) rotate(-20deg); }
+  24% { opacity: 1; }
+  100% { opacity: 0.15; transform: translateY(-20px) scale(1.12) rotate(18deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-effect span {
+    animation: none;
+    opacity: 0.75;
   }
 }
 
@@ -813,6 +891,27 @@ input:not([type]) {
   box-shadow: 0 5px 0 rgba(3, 6, 22, 0.75), 0 0 20px rgba(255, 211, 77, 0.22);
 }
 
+.card.is-highlighted {
+  position: relative;
+  z-index: 1;
+  outline: 4px solid var(--cyan);
+  outline-offset: -4px;
+  transform: translateY(-4px) rotate(-1deg) scale(1.03);
+  box-shadow:
+    0 7px 0 rgba(3, 6, 22, 0.75),
+    0 0 0 7px rgba(84, 230, 255, 0.15),
+    0 0 28px rgba(84, 230, 255, 0.55);
+}
+
+.card.is-highlighted::after {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+  content: "👀";
+  font-size: 1rem;
+  filter: drop-shadow(0 2px 4px rgba(3, 6, 22, 0.65));
+}
+
 .card.is-pickable:active {
   transform: translateY(3px);
 }
@@ -826,6 +925,43 @@ input:not([type]) {
   background: transparent;
   border: 2px dashed var(--line);
   box-shadow: none;
+}
+
+/* 태블릿 가로모드에서는 왼쪽에 문제판, 오른쪽에 현재 문제·주사위를 둔다. */
+@media (orientation: landscape) and (min-width: 720px) {
+  .game {
+    width: 100%;
+    max-width: 1180px;
+  }
+
+  .play-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(320px, 0.88fr);
+    align-items: start;
+    gap: 22px;
+  }
+
+  .play-board {
+    grid-column: 1;
+    grid-row: 1;
+    order: 0;
+  }
+
+  .play-question {
+    grid-column: 2;
+    grid-row: 1;
+    order: 1;
+    position: sticky;
+    top: 12px;
+  }
+
+  .play-board .grid {
+    gap: 12px;
+  }
+
+  .play-question .card-stage-text {
+    font-size: clamp(1.35rem, 2.6vw, 2rem);
+  }
 }
 
 /* ── 대기실 ─────────────────────────────────────────── */
@@ -1408,6 +1544,56 @@ input:not([type]) {
   background: var(--bg-panel);
 }
 
+.settings-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.settings-panel-head .panel-title {
+  margin-bottom: 3px;
+}
+
+.settings-target-copy {
+  margin: 0;
+}
+
+.settings-target-copy strong {
+  color: var(--accent);
+}
+
+.settings-room-picker {
+  display: grid;
+  gap: 5px;
+  min-width: 150px;
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.settings-room-picker select {
+  min-height: 42px;
+  padding: 0 30px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-soft);
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-room-picker select:focus {
+  outline: 3px solid rgba(84, 230, 255, 0.28);
+  border-color: var(--cyan);
+}
+
+.settings-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .panel-head {
   display: flex;
   justify-content: space-between;
@@ -1605,6 +1791,14 @@ input:not([type]) {
 
   .teacher-actions > button {
     flex: 1;
+  }
+
+  .settings-panel-head {
+    flex-direction: column;
+  }
+
+  .settings-room-picker {
+    width: 100%;
   }
 }
 

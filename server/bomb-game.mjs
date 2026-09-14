@@ -10,7 +10,20 @@ export const GRID_SIZES = [9, 16];
 export const DICE_MAX_OPTIONS = [3, 4, 6];
 export const QUESTION_TYPES = ["arithmetic", "spelling", "proposition", "custom"];
 export const SCORING_MODES = ["allOrNothing", "partial"];
+export const GRADE_LEVELS = [1, 2, 3, 4, 5, 6];
 export const GRADE_BANDS = ["g12", "g34", "g56"];
+
+export function gradeBandForLevel(level) {
+  if (Number(level) <= 2) return "g12";
+  if (Number(level) <= 4) return "g34";
+  return "g56";
+}
+
+function defaultGradeLevelForBand(gradeBand) {
+  if (gradeBand === "g12") return 2;
+  if (gradeBand === "g56") return 6;
+  return 4;
+}
 
 // 정답 카드는 확인만 하면 되지만 폭탄은 해설을 읽을 시간이 필요하다.
 export const REVEAL_SAFE_MS = 1_600;
@@ -25,7 +38,7 @@ export const DISCONNECT_GRACE_MS = 15_000;
 // 이 시간이 지나면 서버가 카드의 실제 참·거짓 그대로 자동으로 공개한다.
 export const MIN_JUDGE_SECONDS = 3;
 export const MAX_JUDGE_SECONDS = 15;
-export const DEFAULT_JUDGE_SECONDS = 5;
+export const DEFAULT_JUDGE_SECONDS = 6;
 
 export const MAX_CUSTOM_ITEMS = 200;
 export const MAX_TEXT_LENGTH = 160;
@@ -83,7 +96,12 @@ export function normalizeConfig(input = {}) {
   const questionType = QUESTION_TYPES.includes(input.questionType)
     ? input.questionType
     : "arithmetic";
-  const gradeBand = GRADE_BANDS.includes(input.gradeBand) ? input.gradeBand : "g34";
+  const legacyGradeBand = GRADE_BANDS.includes(input.gradeBand) ? input.gradeBand : "g34";
+  const requestedGrade = Number(input.gradeLevel);
+  const gradeLevel = GRADE_LEVELS.includes(requestedGrade)
+    ? requestedGrade
+    : defaultGradeLevelForBand(legacyGradeBand);
+  const gradeBand = gradeBandForLevel(gradeLevel);
   const subject = SUBJECTS.includes(input.subject) ? input.subject : "math";
   const requested = Array.isArray(input.operations)
     ? input.operations.filter((op) => OPERATIONS.includes(op))
@@ -94,6 +112,7 @@ export function normalizeConfig(input = {}) {
   return {
     questionType,
     gradeBand,
+    gradeLevel,
     subject,
     operations: operations.length ? operations : allowed,
     gridSize: GRID_SIZES.includes(Number(input.gridSize)) ? Number(input.gridSize) : 9,
@@ -163,6 +182,8 @@ export class BombRoom {
     this.turnDeadline = null;
     // 카드를 연 뒤 자동 공개까지 남은 시간. 사람이 누르는 판정 버튼은 없다.
     this.judgeEndsAt = null;
+    // 현재 차례 친구가 살펴보는 카드의 자리. 내용은 공개하지 않는다.
+    this.highlightedIndex = null;
     this.createdAt = Date.now();
     this.emptySince = null;
   }
@@ -321,7 +342,13 @@ export class BombRoom {
       return { ok: false, error: "게임 중에는 설정을 바꿀 수 없어요." };
     // 이미 올려 둔 엑셀 문제는 설정만 바꿔도 유지되어야 한다.
     const keepCustom = this.config.customItems;
-    this.config = normalizeConfig({ customItems: keepCustom, ...input });
+    const merged = { ...this.config, customItems: keepCustom, ...input };
+    // 오래된 클라이언트는 gradeBand만 보낸다. 이때 기존 gradeLevel이
+    // 새 학년군 선택을 덮어쓰지 않도록 band를 우선한다.
+    if (Object.prototype.hasOwnProperty.call(input, "gradeBand") &&
+        !Object.prototype.hasOwnProperty.call(input, "gradeLevel"))
+      delete merged.gradeLevel;
+    this.config = normalizeConfig(merged);
     if (!this.config.customItems.length && keepCustom.length)
       this.config.customItems = keepCustom;
     return { ok: true };
@@ -379,6 +406,7 @@ export class BombRoom {
     this.revealEndsAt = null;
     this.turnEndEndsAt = null;
     this.judgeEndsAt = null;
+    this.highlightedIndex = null;
     this.turnDeadline = Date.now() + TURN_TIMEOUT_MS;
   }
 
@@ -416,6 +444,7 @@ export class BombRoom {
     // 카드를 열면 문장이 방 전체에 공개된다. 판정은 사람이 누르지 않고
     // 설정한 초(judgeSeconds)가 지나면 서버가 카드의 실제 참·거짓 그대로 자동 공개한다.
     this.pending = { slotIndex: index, card: slot.card, playerAnswer: null, safe: null };
+    this.highlightedIndex = index;
     this.phase = "judge";
     this.judgeEndsAt = Date.now() + this.config.judgeSeconds * 1_000;
     // 이 단계는 자동으로 끝나므로 사람이 응답을 못 해도 멈추지 않는다. 턴 전체 제한은 끈다.
@@ -456,6 +485,23 @@ export class BombRoom {
     const { slotIndex } = this.pending;
     this.grid[slotIndex] = this.deck.length ? { card: this.deck.pop() } : null;
     this.pending = null;
+    this.highlightedIndex = null;
+  }
+
+  /** 현재 차례 친구가 살펴보는 카드를 방 전체에 표시한다. 내용은 전혀 공개하지 않는다. */
+  previewCard(playerId, rawIndex) {
+    // 포인터가 카드를 떠난 뒤에는 이미 판정 단계일 수 있으므로 조용히 무시한다.
+    if (this.phase !== "pick" || !this.controls(playerId, this.currentPlayerId()))
+      return { ok: true };
+    if (rawIndex === null || rawIndex === undefined || rawIndex === "") {
+      this.highlightedIndex = null;
+      return { ok: true };
+    }
+    const index = Number(rawIndex);
+    if (!Number.isInteger(index) || index < 0 || index >= this.grid.length || !this.grid[index])
+      return { ok: false, error: "그 자리에는 카드가 없어요." };
+    this.highlightedIndex = index;
+    return { ok: true };
   }
 
   advanceFromReveal() {
@@ -488,6 +534,7 @@ export class BombRoom {
     this.phase = "turnEnd";
     this.turnEndEndsAt = Date.now() + TURN_END_MS;
     this.turnDeadline = null;
+    this.highlightedIndex = null;
   }
 
   nextTurn() {
@@ -519,6 +566,7 @@ export class BombRoom {
   finish(reason) {
     this.phase = "finished";
     this.pending = null;
+    this.highlightedIndex = null;
     this.revealEndsAt = null;
     this.turnEndEndsAt = null;
     this.turnDeadline = null;
@@ -587,6 +635,8 @@ export class BombRoom {
         return this.rollDice(playerId);
       case "pick_card":
         return this.pickCard(playerId, message.index);
+      case "preview_card":
+        return this.previewCard(playerId, message.index);
       case "judge":
         // 예전 클라이언트가 남아 있을 때를 대비한 안내. 이제 판정은 항상 자동이다.
         return { ok: false, error: "이 게임은 시간이 지나면 자동으로 판정돼요." };
@@ -741,6 +791,7 @@ export class BombRoom {
       revealEndsAt: this.revealEndsAt,
       turnEndEndsAt: this.turnEndEndsAt,
       turnDeadline: this.turnDeadline,
+      highlightedIndex: this.highlightedIndex,
       // 카드를 연 뒤 자동으로 공개되기까지 남은 시각. 방 전체가 같은 값을 본다.
       judgeEndsAt: this.judgeEndsAt,
       minPlayers: MIN_PLAYERS,

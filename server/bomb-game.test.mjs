@@ -509,6 +509,17 @@ test("1~2학년을 고르면 나눗셈은 자동으로 빠진다", () => {
   assert.deepEqual(config.operations, ["add"]);
 });
 
+test("학년을 1~6학년으로 고르면 문제 학년군이 안전하게 연결된다", () => {
+  const expectedBands = ["g12", "g12", "g34", "g34", "g56", "g56"];
+  for (const [index, expectedBand] of expectedBands.entries()) {
+    const config = normalizeConfig({ gradeLevel: index + 1 });
+    assert.equal(config.gradeLevel, index + 1);
+    assert.equal(config.gradeBand, expectedBand);
+  }
+  // 기존 QR·링크로 들어오는 오래된 설정도 그대로 동작한다.
+  assert.equal(normalizeConfig({ gradeBand: "g56" }).gradeLevel, 6);
+});
+
 test("이상한 설정값은 안전한 범위로 잘린다", () => {
   const config = normalizeConfig({
     diceMax: 99,
@@ -529,6 +540,7 @@ test("이상한 설정값은 안전한 범위로 잘린다", () => {
 });
 
 test("카드 공개까지 걸리는 시간은 3~15초 범위로만 정할 수 있다", () => {
+  assert.equal(DEFAULT_JUDGE_SECONDS, 6);
   assert.equal(normalizeConfig({}).judgeSeconds, DEFAULT_JUDGE_SECONDS);
   assert.equal(normalizeConfig({ judgeSeconds: 1 }).judgeSeconds, MIN_JUDGE_SECONDS);
   assert.equal(normalizeConfig({ judgeSeconds: 3 }).judgeSeconds, 3);
@@ -652,6 +664,18 @@ test("예전 클라이언트가 judge를 보내도 서버가 죽지 않고 안�
   assert.equal(room.phase, "judge");
 });
 
+test("현재 차례 친구가 살펴보는 카드가 방 전체에 강조된다", () => {
+  const room = makeRoom({}, 2);
+  room.start();
+  room.rollDice("p1");
+  assert.equal(room.handle("p1", { type: "preview_card", index: 0 }).ok, true);
+  assert.equal(room.snapshotFor("p2").highlightedIndex, 0);
+  assert.equal(room.handle("p1", { type: "preview_card", index: null }).ok, true);
+  assert.equal(room.snapshotFor("p2").highlightedIndex, null);
+  room.pickCard("p1", 1);
+  assert.equal(room.snapshotFor("p2").highlightedIndex, 1);
+});
+
 test("방장이 아니면 시작·설정·문제 올리기를 할 수 없다", () => {
   const room = makeRoom({}, 2);
   assert.equal(room.handle("p2", { type: "start" }).ok, false);
@@ -690,6 +714,21 @@ test("설정을 모든 방에 한 번에 적용할 수 있다", () => {
     assert.equal(room.config.gradeBand, "g56");
     assert.equal(room.config.diceMax, 6);
   }
+});
+
+test("선생님은 선택한 한 방에만 설정을 적용할 수 있다", () => {
+  const hub = new TeacherHub("T001", "teacher", "문수쌤", 2);
+  const [selected, untouched] = [...hub.rooms.values()];
+  const result = selected.handle("teacher", {
+    type: "update_settings",
+    config: { gradeLevel: 1, questionType: "proposition", subject: "korean", diceMax: 3 },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(selected.config.gradeLevel, 1);
+  assert.equal(selected.config.subject, "korean");
+  assert.equal(selected.config.diceMax, 3);
+  assert.equal(untouched.config.gradeLevel, 4);
+  assert.equal(untouched.config.questionType, "arithmetic");
 });
 
 test("인원이 모인 방만 일괄 시작된다", () => {
