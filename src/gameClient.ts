@@ -71,6 +71,7 @@ export function openGameSocket(
   options: { role?: "teacher"; names?: string[]; hubCode?: string; spectator?: boolean } = {},
 ) {
   const url = new URL(gameWebSocketBase());
+  url.searchParams.set('delta','1');
   url.searchParams.set("room", room || "NEW");
   url.searchParams.set("game", GAME_NAME);
   if (name) url.searchParams.set("name", name);

@@ -55,6 +55,8 @@ export default function App() {
 
   const socketRef = useRef<WebSocket | null>(null);
   const targetRef = useRef<Target | null>(null);
+  const latestGame = useRef<GameState | null>(null);
+  const latestHub = useRef<HubState | null>(null);
   const retryRef = useRef(0);
   const retryTimerRef = useRef<number | null>(null);
 
@@ -83,11 +85,11 @@ export default function App() {
       hubCode: target.hubCode,
       spectator: target.spectator,
     });
-    socketRef.current = socket;
+    const previous = socketRef.current; socketRef.current = socket; previous?.close();
 
     socket.onopen = () => {
       setConnecting(false);
-      retryRef.current = 0;
+      // 방 상태를 받은 뒤에만 재시도 간격을 초기화합니다.
       if (target.room === "NEW") {
         if (target.role === "teacher")
           sendJson(socket, {
@@ -100,6 +102,7 @@ export default function App() {
     };
 
     socket.onmessage = (event) => {
+      if (socketRef.current !== socket) return;
       let message: ServerMessage;
       try {
         message = JSON.parse(event.data);
@@ -108,12 +111,16 @@ export default function App() {
       }
 
       if (isGameState(message)) {
-        setGameState(message);
+        const next = (message as GameState & {full?:boolean}).full===false && latestGame.current?.room===targetRef.current?.room ? {...latestGame.current,...message} : message;
+        latestGame.current=next; retryRef.current=0;
+        setGameState(next);
         setMode(target.spectator ? "spectator" : "student");
         return;
       }
       if (isHubState(message)) {
-        setHubState(message);
+        const next = (message as HubState & {full?:boolean}).full===false && latestHub.current?.hub.code===targetRef.current?.room ? {...latestHub.current,...message} : message;
+        latestHub.current=next; retryRef.current=0;
+        setHubState(next);
         setMode("teacher");
         return;
       }
@@ -177,7 +184,12 @@ export default function App() {
   // 선생님 대시보드의 "관전" 링크는 새 탭에서 이 주소로 자동 입장한다.
   useEffect(() => {
     const room = roomFromUrl();
-    if (!room || !watchFromUrl()) return;
+    if (!watchFromUrl()) {
+      const saved=lastSession();
+      if(saved && /^[A-Z0-9_-]{4,12}$/.test(saved.room) && saved.name && (!room || room===saved.room)) connect({room:saved.room,name:saved.name,role:saved.kind});
+      return;
+    }
+    if (!room) return;
     const previous = lastSession();
     connect({
       room,

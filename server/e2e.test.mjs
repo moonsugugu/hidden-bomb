@@ -34,14 +34,21 @@ function startServer() {
 
 function client(params = {}) {
   const url = new URL(BASE);
+  url.searchParams.set("delta","1");
   for (const [key, value] of Object.entries(params))
     if (value !== undefined) url.searchParams.set(key, String(value));
   const socket = new WebSocket(url);
   const messages = [];
   const waiters = [];
+  const previous = new Map();
 
   socket.on("message", (raw) => {
-    const message = JSON.parse(raw.toString());
+    let message = JSON.parse(raw.toString());
+    if (["state","hub_state"].includes(message.type)) {
+      const type=message.type;
+      if(message.full===false) message={...previous.get(type),...message};
+      previous.set(type,message);
+    }
     messages.push(message);
     for (let index = waiters.length - 1; index >= 0; index -= 1) {
       if (waiters[index].predicate(message)) {

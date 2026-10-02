@@ -1,11 +1,11 @@
 {
   "name": "hidden-bomb",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 3005",
-    "build": "vite build",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 3005",
     "start:web": "vite preview --host 127.0.0.1 --port 3007",
     "server": "node server/server.mjs",

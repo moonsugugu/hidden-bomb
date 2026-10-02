@@ -1,0 +1,16 @@
+
+.audit-qr-button { cursor:pointer; border:1px solid #ddd; border-radius:16px; padding:10px; background:white; color:#24362b; display:inline-flex; align-items:center; gap:10px; }
+.audit-qr-button svg { display:block; }
+.audit-qr-button small { display:block; font-size:12px; }
+.audit-qr-dialog { border:0; border-radius:24px; padding:24px; max-width:calc(100vw - 32px); max-height:calc(100dvh - 32px); overflow:auto; color:#24362b; background:#fffdf6; text-align:center; box-sizing:border-box; }
+.audit-qr-dialog::backdrop { background:#102719aa; }
+.audit-qr-dialog h2 { font-size:20px; margin:8px 28px 18px; }
+.audit-qr-dialog .audit-qr-close { position:absolute; right:12px; top:10px; border:0; background:transparent; font-size:26px; cursor:pointer; }
+.audit-qr-big { display:block; margin:0 auto; max-width:100%; height:auto; }
+.audit-qr-size { display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0; }
+.audit-qr-size label { flex:1; max-width:400px; }
+.audit-qr-size input { display:block; width:100%; }
+.audit-qr-size button { border:1px solid #b6c5b5; border-radius:8px; padding:6px 14px; cursor:pointer; }
+.audit-qr-dialog p { font-size:14px; }
+
+.audit-qr-button img{max-width:100%;height:auto;}

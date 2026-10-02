@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
+import { QrPopup } from "./QrPopup";
 import type {
   Config,
   GradeLevel,
@@ -46,14 +47,15 @@ function useQrCodes(codes: string[]) {
     Promise.all(
       codes.map(async (code) => [
         code,
-        await QRCode.toDataURL(joinUrl(code), {
+        await QRCode.toString(joinUrl(code), {
+          type: "svg",
           margin: 1,
           width: 320,
           color: { dark: "#0f1729", light: "#ffffff" },
         }),
       ]),
     ).then((entries) => {
-      if (!cancelled) setImages(Object.fromEntries(entries));
+      if (!cancelled) setImages(Object.fromEntries(entries.map(([code,svg]) => [code,`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`])));
     });
     return () => {
       cancelled = true;
@@ -401,7 +403,7 @@ function RoomCard({
 
       <div className="room-card-body">
         <div className="room-qr">
-          {qr ? <img src={qr} alt={`${room.label} 입장 QR`} /> : <div className="qr-loading" />}
+          {qr ? <QrPopup src={qr} room={room.code} url={joinUrl(room.code)} /> : <div className="qr-loading" />}
           <button type="button" className="room-code" onClick={copyLink}>
             {copied ? "복사됨!" : room.code}
           </button>
