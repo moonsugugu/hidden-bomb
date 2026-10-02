@@ -11,7 +11,10 @@ import {
   normalizeRoomCode,
 } from "./bomb-game.mjs";
 
-const HOST = "127.0.0.1";
+// 상태 JSON은 직전 메시지와 거의 같아서 압축하면 수십 분의 1로 준다(집 업로드 절약).
+// 소켓마다 압축 메모리를 아끼려고 창 크기·메모리 단계를 낮춘다. WS_COMPRESS=0 이면 끈다.
+const WS_DEFLATE = process.env.WS_COMPRESS === "0" ? false : { zlibDeflateOptions: { level: 3, memLevel: 7 }, serverMaxWindowBits: 13, threshold: 512 };
+const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 3203);
 const GAME_NAME = "hidden-bomb";
 const SOCKET_HEARTBEAT_MS = 5_000;
@@ -310,7 +313,7 @@ const httpServer = http.createServer((request, response) => {
   response.end(JSON.stringify({ error: "not found" }));
 });
 
-const websocketServer = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD_BYTES });
+const websocketServer = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD_BYTES, perMessageDeflate: WS_DEFLATE });
 
 httpServer.on("upgrade", (request, socket, head) => {
   let url;
