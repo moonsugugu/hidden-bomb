@@ -1,4 +1,8 @@
 import { canSend, takeMessageToken, stateDelta, encodeMessage } from './transport.mjs';
+import { BUSY_MESSAGE, createLoadGuard } from './load-guard.mjs';
+
+// 과부하 보호(coderule 규칙 19): 서버가 바쁘면 방송을 늦추고, 끊지 않고, 매우 바쁠 때만 새 방을 막는다.
+const loadGuard = createLoadGuard();
 import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
@@ -77,7 +81,7 @@ function sendState(socket, state) {
 }
 function broadcastRoom(room) {
   if (!room || room.broadcastTimer) return;
-  room.broadcastTimer = setTimeout(() => { room.broadcastTimer = null; flushRoom(room); },80);
+  room.broadcastTimer = setTimeout(() => { room.broadcastTimer = null; flushRoom(room); }, loadGuard.interval(80));
 }
 function flushRoom(room) {
   if (!room) return;
@@ -91,7 +95,7 @@ function flushRoom(room) {
 
 function broadcastHub(hub) {
   if (!hub || hub.broadcastTimer) return;
-  hub.broadcastTimer = setTimeout(() => { hub.broadcastTimer = null; flushHub(hub); },80);
+  hub.broadcastTimer = setTimeout(() => { hub.broadcastTimer = null; flushHub(hub); }, loadGuard.interval(80));
 }
 function flushHub(hub) {
   if (!hub) return;
@@ -328,6 +332,7 @@ const httpServer = http.createServer((request, response) => {
         maxHubRooms: MAX_HUB_ROOMS,
         maxPlayers: MAX_PLAYERS,
         uptime: Math.round(process.uptime()),
+        load: loadGuard.status(),
       }),
     );
     return;
@@ -398,6 +403,8 @@ websocketServer.on("connection", (socket, _request, url) => {
       return send(socket, { type: "error", message: "메시지 형식이 올바르지 않아요." });
     }
     if (!message || typeof message !== 'object' || Array.isArray(message) || typeof message.type !== 'string') return send(socket, {type:'error',message:'메시지 형식이 올바르지 않아요.'});
+    if (!socket.roomCode && !socket.hubCode && (message.type === "create_room" || message.type === "create_hub") && !loadGuard.canCreateRoom())
+      return send(socket, { type: "error", code: "server_busy", message: BUSY_MESSAGE });
     if (!socket.roomCode && !socket.hubCode && message.type === "create_room")
       return handleCreateRoom(socket, message);
     if (!socket.roomCode && !socket.hubCode && message.type === "create_hub")
@@ -421,7 +428,7 @@ setInterval(() => {
 // 절전이나 네트워크 단절로 죽은 소켓을 정리한다.
 setInterval(() => {
   for (const socket of websocketServer.clients) {
-    if (socket.isAlive === false) {
+    if (loadGuard.shouldTerminate(socket)) {
       socket.terminate();
       continue;
     }
