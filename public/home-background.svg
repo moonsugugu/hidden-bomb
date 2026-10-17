@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1080" fill="none">
+  <defs>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="1.6" fill="#8974aa" opacity=".16"/>
+    </pattern>
+    <g id="star" fill="#ffe18a" stroke="#76638f" stroke-width="3" stroke-linejoin="round">
+      <path d="m0-28 8 19 21 1-16 14 4 20-17-11-18 11 5-20-16-14 21-1Z"/>
+    </g>
+    <g id="bomb" stroke="#76638f" stroke-width="3" stroke-linecap="round">
+      <circle r="27" fill="#b7a4d2"/>
+      <path d="M-13-10q4-8 13-8" stroke="#fffaf0"/>
+      <path d="m10-25 7-11 11 6-6 11" fill="#ffe18a"/>
+      <path d="m23-32q-3-20 12-20m0-8 1 5m9-2-4 5"/>
+    </g>
+  </defs>
+  <path fill="#eae5f6" d="M0 0h1440v1080H0z"/>
+  <path d="M720 450 0 40v170Zm0 0L270 0h170Zm0 0L900 0h170Zm0 0 720-330v160Zm0 0 720 220v170Zm0 0 310 630H850Zm0 0L350 1080H180Zm0 0L0 850V680Z" fill="#d7cbea" opacity=".42"/>
+  <path fill="url(#dots)" d="M0 0h1440v1080H0z"/>
+  <g stroke="#b6a3ce" stroke-width="3" fill="#f7f2fc" stroke-linejoin="round">
+    <path d="M-30 196q-4-35 32-35-4-33 27-40 30-8 44 22 31-22 50 4 20 25 0 45 31 8 25 34H-30Z"/>
+    <path d="M1325 350q-13-30 15-48 25-16 45 8 0-41 38-42 36-1 41 37 33-13 45 19v46h-184Z"/>
+    <path d="M-28 930q5-34 37-31-8-32 22-43 27-9 44 14 17-32 48-17 31 14 18 44 37-3 44 33Z"/>
+  </g>
+  <use href="#star" transform="translate(100 90) rotate(-15) scale(.8)"/>
+  <use href="#star" transform="translate(1310 155) rotate(12) scale(.7)"/>
+  <use href="#star" transform="translate(1320 760) rotate(-10)"/>
+  <use href="#star" transform="translate(95 625) rotate(16) scale(.7)"/>
+  <use href="#bomb" transform="translate(88 400) rotate(-18)"/>
+  <use href="#bomb" transform="translate(1350 520) rotate(14) scale(.8)"/>
+</svg>

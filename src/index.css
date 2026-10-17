@@ -301,6 +301,47 @@ input:not([type]) {
 
 /* ── 첫 화면 ────────────────────────────────────────── */
 
+.shell-home {
+  background: #eae5f6 url('/home-background.svg') center top / max(1120px, 100vw) auto repeat-y;
+}
+
+.shell-home .brand-bar {
+  background: #fffaf0;
+  border-bottom: 3px solid #34304e;
+  box-shadow: 0 4px 0 #c7badd;
+}
+
+.shell-home .brand-logo {
+  color: #34304e;
+  text-shadow: none;
+}
+
+.shell-home .brand-collab {
+  color: #574381;
+  background: #eee6fb;
+  border-color: #c1afd8;
+}
+
+.shell-home .made-by { color: #665d7a; }
+
+.shell-home :is(.brand-link, .made-by-link, .guide-button) {
+  color: #44365f;
+  background: #fffdf7;
+  border: 2px solid #b6a6cf;
+  box-shadow: none;
+}
+
+.shell-home .guide-button {
+  color: #34304e;
+  background: #ffe18a;
+  border-color: #34304e;
+}
+
+.shell-home .brand-link:first-child {
+  color: #574381;
+  border-color: #b6a6cf;
+}
+
 .home {
   max-width: 980px;
   margin: 0 auto;
@@ -315,10 +356,10 @@ input:not([type]) {
   place-items: center;
   text-align: center;
   margin: 0 auto 24px;
-  border: 1px solid rgba(84, 230, 255, 0.34);
+  border: 3px solid #34304e;
   border-radius: 28px;
   background: #0b1230;
-  box-shadow: var(--shadow), 0 0 60px rgba(65, 102, 255, 0.14);
+  box-shadow: 0 0 0 6px #fffaf0, 7px 9px 0 6px #c3afd9;
 }
 
 .home-hero-art {
@@ -413,35 +454,71 @@ input:not([type]) {
 .home-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
 .home-tabs button {
-  min-height: 56px;
+  min-height: 60px;
   border-radius: 14px;
-  border: 2px solid #2e4079;
-  background: rgba(17, 25, 54, 0.7);
-  color: var(--text-dim);
+  border: 2px solid #34304e;
+  background: #fffaf0;
+  color: #605476;
+  box-shadow: 0 4px 0 #c3afd9;
   font-size: 1.05rem;
   font-weight: 700;
 }
 
 .home-tabs button.is-on {
-  background: linear-gradient(135deg, rgba(166, 140, 255, 0.24), rgba(84, 230, 255, 0.14));
-  border-color: var(--cyan);
-  color: var(--text);
-  box-shadow: 0 0 22px rgba(84, 230, 255, 0.12);
+  background: #ffe18a;
+  border-color: #34304e;
+  color: #34304e;
+  box-shadow: 0 4px 0 #34304e;
 }
 
 .home-panel {
   max-width: 700px;
   margin: 0 auto;
   padding: clamp(20px, 4vw, 32px);
-  border: 1px solid rgba(166, 140, 255, 0.25);
+  border: 2px solid #34304e;
   border-radius: 22px;
-  background: linear-gradient(145deg, rgba(23, 34, 73, 0.94), rgba(12, 18, 44, 0.94));
-  box-shadow: var(--shadow);
+  background: #fffaf0;
+  color: #34304e;
+  box-shadow: 5px 6px 0 #c3afd9;
+}
+
+.home-panel :is(.field-label, .field-hint) { color: #605476; }
+.home-panel .field-hint.warn { color: #a83a32; }
+.home-panel input:not([type="range"]) {
+  background: #fff;
+  border-color: #b5a3cb;
+  color: #34304e;
+}
+.home-panel input::placeholder { color: #80748e; }
+.home-panel input:focus {
+  border-color: #7660a6;
+  box-shadow: 0 0 0 4px #eae5f6;
+}
+.home-panel input[type="range"] { accent-color: #7660a6; }
+.home-panel .chip {
+  color: #574381;
+  background: #f3edf9;
+  border-color: #b5a3cb;
+}
+.home-panel .chip.is-on {
+  color: #34304e;
+  background: #ffe18a;
+  border-color: #34304e;
+  box-shadow: 0 3px 0 #c3afd9;
+}
+.home-panel .primary {
+  color: #34304e;
+  background: #ffe18a;
+  border: 2px solid #34304e;
+  box-shadow: 0 4px 0 #34304e;
+}
+.shell-home :focus-visible {
+  outline-color: #7660a6;
 }
 
 /* ── 학생 게임 화면 ─────────────────────────────────── */

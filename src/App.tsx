@@ -12,7 +12,7 @@ import {
   saveTeacherId,
   sendJson,
 } from "./gameClient";
-import { BrandLinks } from "./branding";
+import { BrandLinks, MadeBy } from "./branding";
 import StudentView from "./StudentView";
 import TeacherView from "./TeacherView";
 import { unlockAudio } from "./sound";
@@ -239,13 +239,13 @@ export default function App() {
     );
 
   return (
-    <Shell error={error}>
+    <Shell error={error} home>
       <Home onConnect={connect} connecting={connecting} />
     </Shell>
   );
 }
 
-function Shell({ children, error }: { children: React.ReactNode; error: string }) {
+function Shell({ children, error, home = false }: { children: React.ReactNode; error: string; home?: boolean }) {
   const [guideOpen, setGuideOpen] = useState(false);
 
   useEffect(() => {
@@ -258,12 +258,13 @@ function Shell({ children, error }: { children: React.ReactNode; error: string }
   }, [guideOpen]);
 
   return (
-    <div className="shell" onPointerDownCapture={unlockAudio}>
+    <div className={`shell${home ? " shell-home" : ""}`} onPointerDownCapture={unlockAudio}>
       <header className="brand-bar">
         <div className="brand-lockup">
           <div className="brand-title-wrap">
             <span className="brand-logo">히든밤</span>
             <span className="brand-collab">이종대왕 X 문수네집</span>
+            {home && <MadeBy />}
           </div>
         </div>
         <div className="brand-right">
