@@ -1,8 +1,8 @@
 const BRAND_LINKS = [
   { label: "문수네집소개", href: "https://moonsunezipbrand.vercel.app" },
   { label: "문수네집인스타", href: "https://www.instagram.com/moonsune.zip/" },
-  { label: "이종대왕인스타", href: "https://www.instagram.com/king.leejong/" },
   { label: "문수네집컨텐츠", href: "https://moonsunezip.com" },
+  { label: "이종대왕인스타", href: "https://www.instagram.com/king.leejong/" },
 ] as const;
 
 export function BrandLinks() {
