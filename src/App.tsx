@@ -8,6 +8,7 @@ import {
   openGameSocket,
   rememberSession,
   savePlayerId,
+  saveResumeToken,
   saveTeacherId,
   sendJson,
 } from "./gameClient";
@@ -129,6 +130,7 @@ export default function App() {
         case "connected":
           if (message.playerId) {
             savePlayerId(message.playerId, message.room ?? undefined);
+            if (message.resumeToken && message.room) saveResumeToken(message.resumeToken, message.room);
             rememberSession("student", message.room ?? target.room, target.name);
           }
           if (message.teacherId) {

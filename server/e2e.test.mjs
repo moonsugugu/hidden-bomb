@@ -354,7 +354,7 @@ test("새로고침해도 같은 참가자로 돌아온다", async () => {
   const playerId = connected.playerId;
   first.close();
 
-  const again = client({ room: roomCode, name: "가람", playerId });
+  const again = client({ room: roomCode, name: "가람", playerId, resumeToken: connected.resumeToken });
   await again.opened();
   const back = await again.wait((m) => m.type === "connected" && m.playerId, "재입장");
   assert.equal(back.playerId, playerId, "재접속에서 다른 참가자로 붙었습니다.");

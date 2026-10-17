@@ -45,9 +45,14 @@ export const MAX_TEXT_LENGTH = 160;
 export const MAX_EXPLAIN_LENGTH = 200;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const finiteNumber = (value, fallback) => {
+  const number = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(number) ? number : fallback;
+};
+export const SEAT_RESERVATION_MS = 60_000;
 
 export function normalizeRoomCode(value) {
-  return String(value || "")
+  return (typeof value === "string" ? value : "")
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9_-]/g, "")
@@ -55,14 +60,14 @@ export function normalizeRoomCode(value) {
 }
 
 export function normalizeName(value) {
-  return String(value || "")
+  return (typeof value === "string" ? value : "")
     .replace(/[<>]/g, "")
     .trim()
     .slice(0, 12);
 }
 
 function normalizeText(value, limit) {
-  return String(value ?? "")
+  return (typeof value === "string" || typeof value === "number" ? String(value) : "")
     .replace(/[<>]/g, "")
     .replace(/\s+/g, " ")
     .trim()
@@ -93,16 +98,20 @@ export function normalizeCustomItems(value) {
 }
 
 export function normalizeConfig(input = {}) {
-  const questionType = QUESTION_TYPES.includes(input.questionType)
+  if (!input || typeof input !== "object" || Array.isArray(input)) input = {};
+  let questionType = QUESTION_TYPES.includes(input.questionType)
     ? input.questionType
     : "arithmetic";
   const legacyGradeBand = GRADE_BANDS.includes(input.gradeBand) ? input.gradeBand : "g34";
-  const requestedGrade = Number(input.gradeLevel);
+  const requestedGrade = finiteNumber(input.gradeLevel, 0);
   const gradeLevel = GRADE_LEVELS.includes(requestedGrade)
     ? requestedGrade
     : defaultGradeLevelForBand(legacyGradeBand);
   const gradeBand = gradeBandForLevel(gradeLevel);
-  const subject = SUBJECTS.includes(input.subject) ? input.subject : "math";
+  const subject = SUBJECTS.includes(input.subject) ? input.subject : questionType === "spelling" ? "korean" : "math";
+  if ((questionType === "arithmetic" && subject !== "math") ||
+      (questionType === "spelling" && subject !== "korean"))
+    questionType = subject === "math" ? "arithmetic" : subject === "korean" ? "spelling" : "proposition";
   const requested = Array.isArray(input.operations)
     ? input.operations.filter((op) => OPERATIONS.includes(op))
     : [];
@@ -115,18 +124,18 @@ export function normalizeConfig(input = {}) {
     gradeLevel,
     subject,
     operations: operations.length ? operations : allowed,
-    gridSize: GRID_SIZES.includes(Number(input.gridSize)) ? Number(input.gridSize) : 9,
-    deckSize: clamp(Math.round(Number(input.deckSize) || 40), 12, 60),
-    bombRatio: clamp(Number(input.bombRatio) || 0.3, 0.1, 0.5),
-    diceMax: DICE_MAX_OPTIONS.includes(Number(input.diceMax)) ? Number(input.diceMax) : 4,
+    gridSize: GRID_SIZES.includes(finiteNumber(input.gridSize, 0)) ? Number(input.gridSize) : 9,
+    deckSize: clamp(Math.round(finiteNumber(input.deckSize, 40) || 40), 12, 60),
+    bombRatio: clamp(finiteNumber(input.bombRatio, 0.3) || 0.3, 0.1, 0.5),
+    diceMax: DICE_MAX_OPTIONS.includes(finiteNumber(input.diceMax, 0)) ? Number(input.diceMax) : 4,
     // 카드를 열고 몇 초 뒤에 자동으로 공개할지. 판정은 항상 자동이고 사람이 누르지 않는다.
     judgeSeconds: clamp(
-      Math.round(Number(input.judgeSeconds) || DEFAULT_JUDGE_SECONDS),
+      Math.round(finiteNumber(input.judgeSeconds, DEFAULT_JUDGE_SECONDS) || DEFAULT_JUDGE_SECONDS),
       MIN_JUDGE_SECONDS,
       MAX_JUDGE_SECONDS,
     ),
     scoring: SCORING_MODES.includes(input.scoring) ? input.scoring : "allOrNothing",
-    targetScore: clamp(Math.round(Number(input.targetScore) || 0), 0, 50),
+    targetScore: clamp(Math.round(finiteNumber(input.targetScore, 0)), 0, 50),
     customItems: normalizeCustomItems(input.customItems),
   };
 }
@@ -190,16 +199,28 @@ export class BombRoom {
 
   /* ── 참가자 ─────────────────────────────────────────── */
 
-  addPlayer({ id = randomUUID(), name, isHost = false, ownerId = null }) {
+  releaseExpiredSeats(now = Date.now()) {
+    if (this.phase !== "lobby") return;
+    for (const [id, player] of this.players) {
+      if (!player.connected && player.disconnectedAt !== null && now - player.disconnectedAt >= SEAT_RESERVATION_MS) {
+        this.players.delete(id);
+        if (this.hostId === id) this.hostId = null;
+      }
+    }
+    if (!this.hostId && !this.controllerId) this.hostId = this.connectedPlayers()[0]?.id ?? null;
+  }
+
+  addPlayer({ id = randomUUID(), name, isHost = false, ownerId = null, resumeToken = randomUUID() }) {
     const cleanName = normalizeName(name);
     if (!cleanName) return { ok: false, error: "이름을 입력해 주세요." };
     if (this.phase !== "lobby")
       return { ok: false, error: "게임이 이미 시작되어 들어갈 수 없어요." };
-    if (this.connectedPlayers().length >= MAX_PLAYERS)
+    this.releaseExpiredSeats();
+    if (this.players.size >= MAX_PLAYERS)
       return { ok: false, error: `이 방은 ${MAX_PLAYERS}명이 꽉 찼어요.` };
     if (
       [...this.players.values()].some(
-        (player) => player.connected && player.name.toLowerCase() === cleanName.toLowerCase(),
+        (player) => player.name.toLowerCase() === cleanName.toLowerCase(),
       )
     )
       return { ok: false, error: "같은 이름의 친구가 이미 있어요." };
@@ -208,7 +229,10 @@ export class BombRoom {
       name: cleanName,
       connected: true,
       score: 0,
-      seat: this.players.size,
+      seat: [0, 1, 2, 3].find(seat => ![...this.players.values()].some(p => p.seat === seat)),
+      resumeToken,
+      disconnectedAt: null,
+      lastActiveAt: Date.now(),
       // 한 기기가 여러 명을 맡는 모둠 1기기 모드에서는 같은 ownerId를 공유한다.
       // 혼자 들어온 사람은 자기 자신이 주인이다.
       ownerId: ownerId || id,
@@ -230,7 +254,8 @@ export class BombRoom {
     if (!cleaned.length) return { ok: false, error: "이름을 입력해 주세요." };
     if (this.phase !== "lobby")
       return { ok: false, error: "게임이 이미 시작되어 들어갈 수 없어요." };
-    if (this.connectedPlayers().length + cleaned.length > MAX_PLAYERS)
+    this.releaseExpiredSeats();
+    if (this.players.size + cleaned.length > MAX_PLAYERS)
       return { ok: false, error: `이 방은 ${MAX_PLAYERS}명까지만 들어갈 수 있어요.` };
 
     const lowered = cleaned.map((name) => name.toLowerCase());
@@ -238,15 +263,15 @@ export class BombRoom {
       return { ok: false, error: "같은 이름을 두 번 적었어요." };
     const taken = new Set(
       [...this.players.values()]
-        .filter((player) => player.connected)
         .map((player) => player.name.toLowerCase()),
     );
     const clash = cleaned.find((name) => taken.has(name.toLowerCase()));
     if (clash) return { ok: false, error: `'${clash}' 이름을 쓰는 친구가 이미 있어요.` };
 
     const ownerId = randomUUID();
+    const resumeToken = randomUUID();
     const added = cleaned.map(
-      (name) => this.addPlayer({ id: randomUUID(), name, ownerId }).player,
+      (name) => this.addPlayer({ id: randomUUID(), name, ownerId, resumeToken }).player,
     );
     return { ok: true, players: added, primary: added[0] };
   }
@@ -284,7 +309,11 @@ export class BombRoom {
       player.name = cleanName;
     }
     // 기기를 함께 쓰는 참가자는 다 같이 돌아온다.
-    for (const member of this.groupOf(id)) member.connected = true;
+    for (const member of this.groupOf(id)) {
+      member.connected = true;
+      member.disconnectedAt = null;
+      member.lastActiveAt = Date.now();
+    }
     this.emptySince = null;
     return { ok: true, player };
   }
@@ -294,7 +323,10 @@ export class BombRoom {
     if (!player) return false;
     // 기기 하나가 끊기면 그 기기를 쓰던 참가자가 다 같이 끊긴다.
     const group = this.groupOf(id);
-    for (const member of group) member.connected = connected;
+    for (const member of group) {
+      member.connected = connected;
+      member.disconnectedAt = connected ? null : Date.now();
+    }
     if (!connected && [...this.players.values()].every((item) => !item.connected))
       this.emptySince = Date.now();
     // 끊긴 기기의 차례면 방 전체가 멈추므로 대기 시간을 짧게 줄인다.
@@ -337,7 +369,9 @@ export class BombRoom {
 
   /* ── 설정 ───────────────────────────────────────────── */
 
-  updateSettings(input) {
+  updateSettings(input = {}) {
+    if (!input || typeof input !== "object" || Array.isArray(input))
+      return { ok: false, error: "설정 형식이 올바르지 않아요." };
     if (this.phase !== "lobby" && this.phase !== "finished")
       return { ok: false, error: "게임 중에는 설정을 바꿀 수 없어요." };
     // 이미 올려 둔 엑셀 문제는 설정만 바꿔도 유지되어야 한다.
@@ -368,6 +402,7 @@ export class BombRoom {
   /* ── 게임 진행 ──────────────────────────────────────── */
 
   start() {
+    if (this.isPlaying()) return { ok: false, error: "이미 게임이 진행 중이에요." };
     const players = this.connectedPlayers();
     if (players.length < MIN_PLAYERS)
       return { ok: false, error: `${MIN_PLAYERS}명 이상 모여야 시작할 수 있어요.` };
@@ -435,7 +470,7 @@ export class BombRoom {
     if (this.phase !== "pick") return { ok: false, error: "지금은 카드를 고를 때가 아니에요." };
     if (!this.controls(playerId, this.currentPlayerId()))
       return { ok: false, error: "지금은 내 차례가 아니에요." };
-    const index = Number(rawIndex);
+    const index = finiteNumber(rawIndex, NaN);
     if (!Number.isInteger(index) || index < 0 || index >= this.grid.length)
       return { ok: false, error: "그 자리에는 카드가 없어요." };
     const slot = this.grid[index];
@@ -497,7 +532,7 @@ export class BombRoom {
       this.highlightedIndex = null;
       return { ok: true };
     }
-    const index = Number(rawIndex);
+    const index = finiteNumber(rawIndex, NaN);
     if (!Number.isInteger(index) || index < 0 || index >= this.grid.length || !this.grid[index])
       return { ok: false, error: "그 자리에는 카드가 없어요." };
     this.highlightedIndex = index;
@@ -643,8 +678,10 @@ export class BombRoom {
       case "skip_turn":
         // 접속이 끊긴 사람 때문에 방이 멈췄을 때 선생님이 넘길 수 있게 한다.
         if (!this.canHost(playerId)) return { ok: false, error: "방장만 넘길 수 있어요." };
-        if (!this.isPlaying()) return { ok: false, error: "지금은 넘길 수 없어요." };
-        this.pending = null;
+        if (!this.isPlaying() || this.phase === "turnEnd") return { ok: false, error: "지금은 넘길 수 없어요." };
+        this.consumePendingCard();
+        this.judgeEndsAt = null;
+        this.revealEndsAt = null;
         this.endTurn(false);
         return { ok: true };
       case "rematch":
@@ -802,14 +839,15 @@ export class BombRoom {
 }
 
 export class TeacherHub {
-  constructor(code, teacherId, teacherName, roomCount = 1) {
+  constructor(code, teacherId, teacherName, roomCount = 1, { isCodeTaken = () => false } = {}) {
     this.code = normalizeRoomCode(code);
     this.teacherId = teacherId || randomUUID();
     this.teacherName = normalizeName(teacherName) || "담임 선생님";
     this.rooms = new Map();
+    this.isCodeTaken = isCodeTaken;
     this.createdAt = Date.now();
     this.emptySince = null;
-    const count = clamp(Math.round(Number(roomCount) || 1), 1, MAX_HUB_ROOMS);
+    const count = clamp(Math.round(finiteNumber(roomCount, 1) || 1), 1, MAX_HUB_ROOMS);
     for (let index = 0; index < count; index += 1) this.createChildRoom({}, `${index + 1}모둠`);
   }
 
@@ -818,7 +856,7 @@ export class TeacherHub {
       return { ok: false, error: `방은 최대 ${MAX_HUB_ROOMS}개까지 만들 수 있어요.` };
     let code;
     do code = `S${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-    while (this.rooms.has(code));
+    while (this.rooms.has(code) || this.isCodeTaken(code));
     const room = new BombRoom(code, config, {
       kind: "student",
       hubCode: this.code,

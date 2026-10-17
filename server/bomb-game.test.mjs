@@ -13,7 +13,91 @@ import {
   normalizeCustomItems,
   buildDeck,
   TURN_TIMEOUT_MS,
+  SEAT_RESERVATION_MS,
 } from "./bomb-game.mjs";
+
+test("끊긴 자리도 정원에 포함하고 60초 뒤 대기실에서만 비운다", () => {
+  const room = makeRoom({}, 4);
+  room.setConnected("p2", false);
+  assert.equal(room.addPlayer({ name: "새친구" }).ok, false);
+  room.getPlayer("p2").disconnectedAt = Date.now() - SEAT_RESERVATION_MS - 1;
+  const added = room.addPlayer({ name: "새친구" });
+  assert.equal(added.ok, true);
+  assert.equal(room.players.size, 4);
+  assert.equal(new Set(room.seatedPlayers().map(p => p.seat)).size, 4);
+  assert.equal(room.reconnectPlayer("p2", "나은").ok, false);
+});
+
+test("한 기기 모드도 예약된 자리를 침범하지 않고 인증키를 공유한다", () => {
+  const room = new BombRoom("RESERVE");
+  const group = room.addPlayers(["가람", "나은", "다올"]);
+  assert.equal(new Set(group.players.map(p => p.resumeToken)).size, 1);
+  room.setConnected(group.primary.id, false);
+  assert.equal(room.addPlayers(["새친구1", "새친구2"]).ok, false);
+  room.reconnectPlayer(group.primary.id, "가람");
+  assert.equal(room.connectedPlayers().length, 3);
+});
+
+test("진행 중 재시작과 턴 정리 중 넘기기는 점수를 다시 주지 않는다", () => {
+  const room = makeRoom({ scoring: "partial" });
+  room.start();
+  stackGrid(room, Array(9).fill(true));
+  room.rollDice("p1");
+  room.pickCard("p1", 0);
+  room.tick(room.judgeEndsAt);
+  room.tick(room.revealEndsAt);
+  if (room.phase !== "turnEnd") room.handle("p1", { type: "skip_turn" });
+  assert.equal(room.getPlayer("p1").score, 1);
+  assert.equal(room.handle("p1", { type: "skip_turn" }).ok, false);
+  assert.equal(room.handle("p1", { type: "skip_turn" }).ok, false);
+  assert.equal(room.start().ok, false);
+  assert.equal(room.getPlayer("p1").score, 1);
+});
+
+test("공개 중 턴을 넘기면 카드를 소비해 다시 점수를 얻지 못한다", () => {
+  const room = makeRoom({ scoring: "partial" });
+  room.start();
+  stackGrid(room, Array(9).fill(true));
+  room.rollDice("p1");
+  room.pickCard("p1", 0);
+  room.tick(room.judgeEndsAt);
+  const cardId = room.grid[0].card.id;
+  assert.equal(room.handle("p1", { type: "skip_turn" }).ok, true);
+  assert.notEqual(room.grid[0].card.id, cardId);
+  assert.equal(room.pending, null);
+  assert.equal(room.judgeEndsAt, null);
+  assert.equal(room.revealEndsAt, null);
+});
+
+test("다른 통합방과 같은 방 코드가 나오면 다시 뽑는다", (t) => {
+  const values = [0.1234567, 0.1234567, 0.7654321];
+  t.mock.method(Math, "random", () => values.shift() ?? 0.4);
+  const first = new TeacherHub("TFIRST", "teacher1", "선생님1", 1);
+  const occupied = new Set(first.rooms.keys());
+  const second = new TeacherHub("TSECOND", "teacher2", "선생님2", 1, { isCodeTaken: code => occupied.has(code) });
+  assert.notEqual([...first.rooms.keys()][0], [...second.rooms.keys()][0]);
+});
+
+test("잘못된 중첩 설정값과 null도 서버에서 안전하게 처리한다", () => {
+  assert.doesNotThrow(() => normalizeConfig(null));
+  const config = normalizeConfig({ deckSize: { toString: null }, gradeLevel: [], targetScore: "Infinity", diceMax: {} });
+  assert.equal(config.deckSize, 40);
+  assert.equal(config.targetScore, 0);
+  const room = makeRoom();
+  assert.equal(room.updateSettings(null).ok, false);
+});
+
+test("과목을 바꾸면 실제 덱도 그 과목 문제은행에서 나온다", () => {
+  for (const subject of ["science", "social", "english"]) {
+    const room = makeRoom({ questionType: "arithmetic", subject });
+    assert.equal(room.config.questionType, "proposition");
+    assert.equal(room.start().ok, true);
+    assert.ok([...room.deck, ...room.grid.map(s => s.card)].every(card => card.tag === `${subject}:g34`));
+  }
+  const korean = normalizeConfig({ subject: "korean", questionType: "arithmetic" });
+  assert.equal(korean.questionType, "spelling");
+  assert.equal(normalizeConfig({ questionType: "spelling" }).subject, "korean");
+});
 
 /* ── 테스트 도우미 ────────────────────────────────────── */
 

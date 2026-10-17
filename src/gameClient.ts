@@ -4,6 +4,7 @@ export const GAME_NAME = "hidden-bomb";
 
 const savedPlayerKey = "hidden-bomb-player-id";
 const savedTeacherKey = "hidden-bomb-teacher-id";
+const savedResumeKey = "hidden-bomb-resume-token";
 
 function scopedKey(base: string, room?: string) {
   const normalized = room?.trim().toUpperCase();
@@ -31,6 +32,10 @@ export function savePlayerId(id: string, room?: string) {
   if (!id) return;
   window.localStorage.setItem(savedPlayerKey, id);
   if (room && room !== "NEW") window.localStorage.setItem(scopedKey(savedPlayerKey, room), id);
+}
+
+export function saveResumeToken(token: string, room: string) {
+  window.localStorage.setItem(scopedKey(savedResumeKey, room), token);
 }
 
 export function savedTeacherId(room?: string) {
@@ -87,6 +92,8 @@ export function openGameSocket(
   } else {
     const playerId = savedPlayerId(room);
     if (playerId) url.searchParams.set("playerId", playerId);
+    const resumeToken = window.localStorage.getItem(scopedKey(savedResumeKey, room));
+    if (resumeToken) url.searchParams.set("resumeToken", resumeToken);
   }
   return new WebSocket(url);
 }

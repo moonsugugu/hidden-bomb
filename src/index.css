@@ -24,7 +24,7 @@
   --violet: #a68cff;
   --gold: #ffb454;
   --radius: 18px;
-  --shadow: 0 18px 45px rgba(0, 0, 0, 0.3);
+  --shadow: 5px 6px 0 #22385e;
 }
 
 * {
@@ -36,10 +36,7 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100%;
-  background:
-    radial-gradient(circle at 15% -10%, rgba(92, 105, 255, 0.22), transparent 35%),
-    radial-gradient(circle at 90% 5%, rgba(0, 219, 255, 0.12), transparent 28%),
-    var(--bg);
+  background: #cdefff url('/cartoon-background.svg') center top / max(1120px, 100vw) auto repeat-y;
   color: var(--text);
   font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   -webkit-text-size-adjust: 100%;
@@ -71,9 +68,7 @@ input:not([type]) {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background:
-    linear-gradient(180deg, rgba(7, 11, 31, 0.22), rgba(7, 11, 31, 0.85)),
-    radial-gradient(circle at 50% 100%, rgba(94, 74, 210, 0.14), transparent 45%);
+  background: transparent;
 }
 
 .brand-bar {
@@ -128,6 +123,16 @@ input:not([type]) {
   flex: 1;
   width: 100%;
   padding: clamp(18px, 3vw, 34px) clamp(14px, 3vw, 34px) 44px;
+  color: #22385e;
+}
+
+.home-panel, .home-hero, .panel, .room-card, .lobby,
+.score-chip, .turn-banner, .ranking li, .bomb-note, .turn-result, .judge-countdown {
+  color: var(--text);
+}
+
+.play-board > .muted, .stage-roll > .muted {
+  color: #334a6c;
 }
 
 .error-bar {
@@ -453,7 +458,7 @@ input:not([type]) {
   gap: 10px;
   margin-bottom: 12px;
   font-size: 0.9rem;
-  color: var(--text-dim);
+  color: #22385e;
 }
 
 .game-head-left {
@@ -467,6 +472,7 @@ input:not([type]) {
   padding: 4px 10px;
   border-radius: 999px;
   background: var(--bg-soft);
+  color: var(--text);
 }
 
 .scoreboard {
@@ -483,7 +489,8 @@ input:not([type]) {
   padding: 8px 14px;
   border-radius: 999px;
   background: var(--bg-panel);
-  border: 2px solid transparent;
+  border: 2px solid #22385e;
+  box-shadow: 3px 3px 0 #22385e;
 }
 
 .score-chip.is-turn {
@@ -523,6 +530,8 @@ input:not([type]) {
   border-radius: var(--radius);
   background: var(--bg-soft);
   font-size: 1.1rem;
+  border: 3px solid #22385e;
+  box-shadow: 4px 4px 0 #22385e;
 }
 
 .turn-banner.is-mine {
@@ -550,9 +559,9 @@ input:not([type]) {
   margin: 0 0 10px;
   padding: 12px 16px;
   border-radius: var(--radius);
-  border: 2px dashed var(--accent);
-  background: rgba(251, 191, 36, 0.12);
-  color: var(--accent);
+  border: 2px dashed #a66b14;
+  background: #fff4bf;
+  color: #62420a;
   font-size: 1.05rem;
   font-weight: 800;
   text-align: center;
@@ -563,8 +572,8 @@ input:not([type]) {
   padding: 11px 16px;
   border: 2px solid var(--cyan);
   border-radius: var(--radius);
-  background: rgba(84, 230, 255, 0.1);
-  color: var(--cyan);
+  background: #e3f9ff;
+  color: #195b78;
   font-weight: 800;
   text-align: center;
 }
@@ -973,6 +982,8 @@ input:not([type]) {
   border-radius: var(--radius);
   background: var(--bg-panel);
   text-align: center;
+  border: 3px solid #22385e;
+  box-shadow: var(--shadow);
 }
 
 .lobby-room {
@@ -1041,7 +1052,7 @@ input:not([type]) {
   font-size: 1.3rem;
   font-weight: 800;
   text-align: center;
-  color: var(--accent);
+  color: #8b4f00;
 }
 
 .ranking {
@@ -1351,11 +1362,11 @@ input:not([type]) {
 
 .teacher-sub {
   margin: 4px 0 0;
-  color: var(--text-dim);
+  color: #334a6c;
 }
 
 .teacher-sub strong {
-  color: var(--accent);
+  color: #22385e;
   letter-spacing: 0.08em;
 }
 
@@ -1388,7 +1399,8 @@ input:not([type]) {
   padding: 14px;
   border-radius: var(--radius);
   background: var(--bg-panel);
-  border: 2px solid transparent;
+  border: 3px solid #22385e;
+  box-shadow: var(--shadow);
 }
 
 .room-card.is-playing {
@@ -1542,6 +1554,8 @@ input:not([type]) {
   padding: 18px;
   border-radius: var(--radius);
   background: var(--bg-panel);
+  border: 3px solid #22385e;
+  box-shadow: var(--shadow);
 }
 
 .settings-panel-head {

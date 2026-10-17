@@ -175,7 +175,7 @@ export type HubState = {
 export type ServerMessage =
   | GameState
   | HubState
-  | { type: "connected"; room?: string | null; playerId?: string; hub?: string; teacherId?: string; game?: string; canCreate?: boolean; role?: string }
+  | { type: "connected"; room?: string | null; playerId?: string; resumeToken?: string; hub?: string; teacherId?: string; game?: string; canCreate?: boolean; role?: string }
   | { type: "room_created"; room: string; playerId: string }
   | { type: "hub_created"; hub: string; teacherId: string }
   | { type: "error"; message: string }
