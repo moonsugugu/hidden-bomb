@@ -322,9 +322,7 @@ input:not([type]) {
   border-color: #c1afd8;
 }
 
-.shell-home .made-by { color: #665d7a; }
-
-.shell-home :is(.brand-link, .made-by-link, .guide-button) {
+.shell-home :is(.brand-link, .guide-button) {
   color: #44365f;
   background: #fffdf7;
   border: 2px solid #b6a6cf;
