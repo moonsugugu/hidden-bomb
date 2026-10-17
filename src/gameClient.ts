@@ -54,19 +54,24 @@ export function saveTeacherId(id: string, room?: string) {
 
 /** 새로고침이나 절전에서 돌아왔을 때 같은 사람으로 다시 붙기 위해 마지막 방을 기억한다. */
 export function rememberSession(kind: "student" | "teacher", room: string, name: string) {
-  window.localStorage.setItem("hidden-bomb-last", JSON.stringify({ kind, room, name }));
+  const saved = JSON.stringify({ kind, room, name });
+  window.sessionStorage.setItem("hidden-bomb-last", saved);
+  window.localStorage.setItem("hidden-bomb-last", saved);
 }
 
 export function lastSession(): { kind: "student" | "teacher"; room: string; name: string } | null {
   try {
-    const raw = window.localStorage.getItem("hidden-bomb-last");
-    return raw ? JSON.parse(raw) : null;
+    const raw = window.sessionStorage.getItem("hidden-bomb-last") || window.localStorage.getItem("hidden-bomb-last");
+    const saved = raw ? JSON.parse(raw) : null;
+    return saved && ["student", "teacher"].includes(saved.kind) &&
+      typeof saved.room === "string" && typeof saved.name === "string" ? saved : null;
   } catch {
     return null;
   }
 }
 
 export function clearSession() {
+  window.sessionStorage.removeItem("hidden-bomb-last");
   window.localStorage.removeItem("hidden-bomb-last");
 }
 

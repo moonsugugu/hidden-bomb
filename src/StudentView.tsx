@@ -3,6 +3,7 @@ import type { GameState, GridSlot } from "./types";
 import { PHASE_LABELS, describeConfig } from "./labels";
 import { downloadBombReport } from "./excel";
 import { playSound } from "./sound";
+import { countdownRatio } from "./timing";
 
 type Props = {
   state: GameState;
@@ -12,30 +13,24 @@ type Props = {
 };
 
 /** 서버가 정한 종료 시각까지 남은 비율(0~1). 공개 시간이 얼마나 남았는지 보여 준다. */
-function useCountdown(endsAt: number | null, serverTime: number) {
+function useCountdown(endsAt: number | null, serverTime: number, durationMs?: number) {
   const [ratio, setRatio] = useState(1);
-  const startRef = useRef<{ endsAt: number; total: number } | null>(null);
 
   useEffect(() => {
     if (!endsAt) {
-      startRef.current = null;
       setRatio(1);
       return;
     }
-    const total = Math.max(1, endsAt - serverTime);
-    startRef.current = { endsAt, total };
+    const receivedAt = performance.now();
     const tick = () => {
-      const current = startRef.current;
-      if (!current) return;
-      const left = current.endsAt - Date.now();
-      setRatio(Math.max(0, Math.min(1, left / current.total)));
+      setRatio(countdownRatio(endsAt, serverTime, receivedAt, performance.now(), durationMs));
     };
     tick();
     const timer = window.setInterval(tick, 80);
     return () => window.clearInterval(timer);
     // serverTime은 매 상태마다 바뀌므로 endsAt이 바뀔 때만 다시 잡는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endsAt]);
+  }, [endsAt, durationMs]);
 
   return ratio;
 }
@@ -205,7 +200,7 @@ export default function StudentView({ state, send, onLeave, spectator = false }:
   const openSlot = state.grid.find((slot) => slot.faceUp);
   const revealRatio = useCountdown(state.revealEndsAt, state.serverTime);
   // 카드를 연 뒤 자동 공개까지 남은 시간. 방 전체가 같은 값을 보고 함께 기다린다.
-  const judgeRatio = useCountdown(state.judgeEndsAt, state.serverTime);
+  const judgeRatio = useCountdown(state.judgeEndsAt, state.serverTime, state.config.judgeSeconds * 1000);
   const judgeSecondsLeft = Math.max(0, Math.ceil(judgeRatio * state.config.judgeSeconds));
   const wasMyTurn = useRef(false);
   const previousPhase = useRef(state.phase);

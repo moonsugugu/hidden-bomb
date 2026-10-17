@@ -16,6 +16,7 @@ import { BrandLinks } from "./branding";
 import StudentView from "./StudentView";
 import TeacherView from "./TeacherView";
 import { unlockAudio } from "./sound";
+import { nextReconnect } from "./timing";
 
 type Mode = "home" | "student" | "teacher" | "spectator";
 type Target = {
@@ -29,7 +30,6 @@ type Target = {
   names?: string[];
 };
 
-const MAX_RETRY_DELAY_MS = 8_000;
 const ORIGINAL_VIDEO_URL = "https://www.youtube.com/watch?v=LBD1a_c2SIY";
 
 /** QR로 들어오면 주소에 방 코드가 붙어 있다. */
@@ -76,6 +76,8 @@ export default function App() {
   }, []);
 
   const connect = useCallback((target: Target) => {
+    if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = null;
     targetRef.current = target;
     setConnecting(true);
     setError("");
@@ -87,10 +89,12 @@ export default function App() {
       spectator: target.spectator,
     });
     const previous = socketRef.current; socketRef.current = socket; previous?.close();
+    let openedAt = performance.now();
+    let receivedState = false;
 
     socket.onopen = () => {
+      openedAt = performance.now();
       setConnecting(false);
-      // 방 상태를 받은 뒤에만 재시도 간격을 초기화합니다.
       if (target.room === "NEW") {
         if (target.role === "teacher")
           sendJson(socket, {
@@ -113,14 +117,14 @@ export default function App() {
 
       if (isGameState(message)) {
         const next = (message as GameState & {full?:boolean}).full===false && latestGame.current?.room===targetRef.current?.room ? {...latestGame.current,...message} : message;
-        latestGame.current=next; retryRef.current=0;
+        latestGame.current=next; receivedState=true;
         setGameState(next);
         setMode(target.spectator ? "spectator" : "student");
         return;
       }
       if (isHubState(message)) {
         const next = (message as HubState & {full?:boolean}).full===false && latestHub.current?.hub.code===targetRef.current?.room ? {...latestHub.current,...message} : message;
-        latestHub.current=next; retryRef.current=0;
+        latestHub.current=next; receivedState=true;
         setHubState(next);
         setMode("teacher");
         return;
@@ -156,8 +160,8 @@ export default function App() {
     };
 
     socket.onclose = (event) => {
-      setConnecting(false);
       if (socketRef.current !== socket) return; // 이미 새 연결로 갈아탔다
+      setConnecting(false);
       socketRef.current = null;
 
       // 1008은 서버가 거절한 경우(방 없음·인증 불일치)라 다시 붙어도 소용없다.
@@ -174,8 +178,9 @@ export default function App() {
       }
 
       // 학교 와이파이가 잠깐 끊기거나 태블릿이 절전에서 깨어난 경우 자동으로 다시 붙는다.
-      const delay = Math.min(MAX_RETRY_DELAY_MS, 800 * 2 ** retryRef.current);
-      retryRef.current += 1;
+      const retry = nextReconnect(retryRef.current, performance.now() - openedAt, receivedState);
+      const delay = retry.delay;
+      retryRef.current = retry.attempt;
       setError(`연결이 끊겼어요. ${Math.round(delay / 100) / 10}초 뒤에 다시 시도할게요…`);
       retryTimerRef.current = window.setTimeout(() => connect(current), delay);
     };

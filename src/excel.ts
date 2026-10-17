@@ -25,15 +25,35 @@ function readAnswer(raw: unknown): boolean | null {
 function looksLikeHeader(row: unknown[]) {
   const first = String(row?.[0] ?? "").trim();
   const second = String(row?.[1] ?? "").trim();
-  return /문장|문제|내용/.test(first) || /정답|답|o\s*\/\s*x/i.test(second);
+  if (readAnswer(second) !== null && !/^(정답|답)$/.test(second)) return false;
+  return /^(문장|문제|문제\s*내용|내용)$/.test(first) || /^(정답|답)(\s*\(.*\))?$|^o\s*\/\s*x$/i.test(second);
 }
 
 function parseDelimited(text: string, delimiter: string): unknown[][] {
-  return text
-    .replace(/^﻿/, "")
-    .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0)
-    .map((line) => line.split(delimiter).map((cell) => cell.trim().replace(/^"|"$/g, "")));
+  const rows: string[][] = [];
+  let row: string[] = [], cell = "", quoted = false;
+  const source = text.replace(/^\uFEFF/, "");
+  const finishRow = () => {
+    row.push(cell);
+    if (row.some(value => value.trim())) rows.push(row);
+    row = []; cell = "";
+  };
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+    if (quoted) {
+      if (char === '"' && source[i + 1] === '"') { cell += '"'; i++; }
+      else if (char === '"') quoted = false;
+      else cell += char;
+    } else if (char === '"' && !cell.trim()) quoted = true;
+    else if (char === delimiter) { row.push(cell); cell = ""; }
+    else if (char === "\n" || char === "\r") {
+      finishRow();
+      if (char === "\r" && source[i + 1] === "\n") i++;
+    } else cell += char;
+  }
+  if (quoted) throw new Error("문제 파일의 따옴표가 닫히지 않았어요. 파일을 확인해 주세요.");
+  finishRow();
+  return rows;
 }
 
 export function rowsToItems(rows: unknown[][]): ParseResult {
@@ -55,7 +75,12 @@ export function rowsToItems(rows: unknown[][]): ParseResult {
         warnings.push(`${index + 2}번째 줄 "${text.slice(0, 18)}…" 의 정답 칸이 비었거나 O/X가 아니에요.`);
       return;
     }
-    items.push({ text, isTrue: answer, explain: String(row?.[2] ?? "").trim() });
+    const explain = String(row?.[2] ?? "").trim();
+    // 서버의 문장·해설·문항 제한을 넘기면 의미를 잘라 보내지 않고 파일을 다시 고치게 한다.
+    if (text.length > 160 || explain.length > 200)
+      throw new Error(`${index + 1}번째 문항이 너무 길어요. 문장은 160자, 해설은 200자까지 입력해 주세요.`);
+    items.push({ text, isTrue: answer, explain });
+    if (items.length > 200) throw new Error("문제는 한 번에 200개까지 올릴 수 있어요.");
   });
 
   return { items, skipped, warnings };
