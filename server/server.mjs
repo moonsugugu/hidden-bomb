@@ -1,6 +1,7 @@
 import { canSend, takeMessageToken, stateDelta, encodeMessage } from './transport.mjs';
 import { BUSY_MESSAGE, createLoadGuard } from './load-guard.mjs';
 import { createTrafficMeter } from './traffic-meter.mjs';
+import { createRoomRegistry, createTelemetry } from './telemetry.mjs';
 
 // 과부하 보호(coderule 규칙 19): 서버가 바쁘면 방송을 늦추고, 끊지 않고, 매우 바쁠 때만 새 방을 막는다.
 const loadGuard = createLoadGuard();
@@ -30,11 +31,39 @@ const SOCKET_HEARTBEAT_MS = 5_000;
 const MAX_PAYLOAD_BYTES = 262_144;
 const ROOM_TTL_MS = 60_000;
 
-const rooms = new Map();
+// 서버 모니터용 집계: Map 하위 클래스라 기존 코드는 그대로 동작한다.
+const rooms = createRoomRegistry();
 const hubs = new Map();
 const socketsByRoom = new Map();
 const spectatorsByRoom = new Map();
 const socketsByHub = new Map();
+
+// 모둠 방 참가자는 모두 학생이다(선생님은 controllerId, 관전자는 spectatorsByRoom 에만 있다).
+// 소켓이 열려 있는 기기의 참가자만 센다. 모둠 1기기 모드는 같은 기기를 쓰는 학생을 모두 센다.
+function connectedStudentCount(room) {
+  const sockets = socketsByRoom.get(room.code);
+  if (!sockets) return 0;
+  const owners = new Set();
+  for (const [playerId, socket] of sockets) {
+    const player = socket.readyState === WebSocket.OPEN && room.getPlayer(playerId);
+    if (player) owners.add(player.ownerId);
+  }
+  let count = 0;
+  for (const player of room.players.values()) if (player.connected && owners.has(player.ownerId)) count++;
+  return count;
+}
+
+const monitorSnapshot = createTelemetry(
+  rooms,
+  room => ({ students: connectedStudentCount(room), active: room.isPlaying() }),
+  "모둠 방에 이름으로 들어온 학생(학생 방장, 모둠 1기기 모드의 각 학생 포함). 선생님 통합방·관전 화면 제외",
+  { game: "hidden-bomb", label: "히든밤" },
+);
+
+// 학생이 자리에 들어오거나 같은 자리로 돌아올 때 부른다. 참가자 id 는 재접속해도 그대로라 한 번만 센다.
+function noteStudents(room, playerId) {
+  for (const member of room.groupOf(playerId)) rooms.noteStudent(room.code, member.id);
+}
 
 function send(socket, payload) {
   if (canSend(socket)) socket.send(JSON.stringify(payload));
@@ -191,6 +220,7 @@ function handleCreateRoom(socket, message) {
   if (!joined.ok) return send(socket, { type: "error", message: joined.error });
   rooms.set(code, room);
   bindRoomSocket(socket, room, hostId);
+  noteStudents(room, hostId);
   send(socket, { type: "room_created", room: code, playerId: hostId });
   send(socket, { type: "connected", room: code, playerId: hostId, resumeToken: joined.player.resumeToken, game: GAME_NAME });
   broadcastRoom(room);
@@ -334,6 +364,7 @@ function attachExistingRoom(socket) {
   }
   if (!joined.ok) return errorAndClose(socket, joined.error);
   bindRoomSocket(socket, room, joined.player.id);
+  noteStudents(room, joined.player.id);
   send(socket, { type: "connected", room: room.code, playerId: joined.player.id, resumeToken: joined.player.resumeToken, game: GAME_NAME });
   broadcastRoom(room);
 }
@@ -366,6 +397,7 @@ const httpServer = http.createServer((request, response) => {
         uptime: Math.round(process.uptime()),
         load: loadGuard.status(),
         traffic: trafficMeter.status(),
+        monitor: monitorSnapshot(),
       }),
     );
     return;
